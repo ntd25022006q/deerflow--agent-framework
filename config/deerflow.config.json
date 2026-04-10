@@ -29,6 +29,12 @@
     "requireDocumentation": true,
     "requireTesting": true
   },
+  "quality": {
+    "minTestCoverage": 80,
+    "zeroLintWarnings": true,
+    "strictTypes": true,
+    "requireCodeReview": true
+  },
   "ai": {
     "enforceWorkflow": true,
     "requireDeepAnalysis": true,
