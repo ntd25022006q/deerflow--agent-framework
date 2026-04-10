@@ -48,7 +48,7 @@ The Deerflow Agent Framework is a multi-layered enforcement system designed to t
 │       │           │           │             │           │          │
 │  ┌────▼───────────▼───────────▼─────────────▼───────────▼─────┐   │
 │  │              AGENT RULE FILES (Point of Generation)          │   │
-│  │  .cursorrules │ .windsurfrules │ .clinerules │ copilot │ codex│   │
+│  │  .cursorrules │ .windsurfrules │ CLAUDE.md │ copilot │ codex│   │
 │  └──────────────────────────┬─────────────────────────────────┘   │
 └─────────────────────────────┼─────────────────────────────────────┘
                               │ derives from
@@ -496,7 +496,7 @@ Each AI agent integrates through a dedicated rule file placed in the project roo
 |-------|------------------|--------|
 | Cursor | `.cursorrules` | Markdown with special directives |
 | Windsurf | `.windsurfrules` | Markdown with Cascade directives |
-| Claude Code | `.clinerules` | Markdown with tool-specific directives |
+| Claude Code | `CLAUDE.md` | Markdown with tool-specific directives |
 | GitHub Copilot | `.github/copilot-instructions.md` | Markdown |
 | OpenAI Codex | `.codex/instructions.md` | Markdown |
 
@@ -625,7 +625,7 @@ The framework itself has zero runtime dependencies in the target project. All en
 your-project/
 ├── .cursorrules          ← Copied from Deerflow during setup
 ├── .windsurfrules        ← Copied from Deerflow during setup
-├── .clinerules           ← Copied from Deerflow during setup
+├── CLAUDE.md             ← Copied from Deerflow during setup
 ├── .github/
 │   ├── copilot-instructions.md  ← Copied from Deerflow during setup
 │   └── workflows/

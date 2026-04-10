@@ -4,7 +4,7 @@
 
 ### The Strict Enforcement Protocol for ALL AI Coding Agents
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/your-username/deerflow-agent-framework)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ntd25022006q/deerflow--agent-framework)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![AI Agents](https://img.shields.io/badge/supports-Cursor%20%7C%20Windsurf%20%7C%20Claude%20Code%20%7C%20Copilot%20%7C%20Codex%20%7C%20ALL-purple.svg)]
 [![Strict Mode](https://img.shields.io/badge/strict%20mode-ON-red.svg)]
@@ -76,8 +76,8 @@ Get Deerflow running in your project with a single command:
 
 ```bash
 # Clone the framework
-git clone https://github.com/your-username/deerflow-agent-framework.git
-cd deerflow-agent-framework
+git clone https://github.com/ntd25022006q/deerflow--agent-framework.git
+cd deerflow--agent-framework
 
 # Run setup — detects your AI editor and configures everything
 chmod +x scripts/setup.sh && ./scripts/setup.sh
@@ -247,7 +247,7 @@ The first line of defense. AI agents are configured with comprehensive rule file
 |-----------|-------------|
 | `.cursorrules` | 470 lines of Cursor-specific enforcement rules |
 | `.windsurfrules` | 456 lines of Windsurf Cascade-specific rules |
-| `.clinerules` | 464 lines of Claude Code-specific rules |
+| `CLAUDE.md` | 414 lines of Claude Code-specific rules |
 | `.github/copilot-instructions.md` | 447 lines of GitHub Copilot rules |
 | `.codex/instructions.md` | 460 lines of OpenAI Codex rules |
 | `core/rules/master-rules.md` | 678-line single source of truth with 34 problem categories |
@@ -351,7 +351,7 @@ Deerflow catalogs 35 common anti-patterns with detection heuristics, correction 
 │  │  Rules       │──│  (Real-Time) │──│  (CI/CD Enforcement)     │   │
 │  │  (.cursor,   │  │              │  │                          │   │
 │  │   .windsurf, │  │  • Enforcer  │  │  ┌──────┐ ┌──────┐      │   │
-│  │   .cline,    │  │  • Linter    │  │  │ Lint │ │ Test │ ...  │   │
+│  │   claude.md)  │  │  • Linter    │  │  │ Lint │ │ Test │ ...  │   │
 │  │   .copilot)  │  │  • Tester    │  │  └──────┘ └──────┘      │   │
 │  └──────┬──────┘  │  • Dep-Guard  │  └──────────┬───────────────┘   │
 │         │         │  • Architect  │             │                   │
@@ -382,10 +382,14 @@ Deerflow catalogs 35 common anti-patterns with detection heuristics, correction 
 ### Project Structure
 
 ```
-deerflow-agent-framework/
+deerflow--agent-framework/
 ├── .cursorrules                    # Cursor AI rules (470 lines)
 ├── .windsurfrules                  # Windsurf rules (456 lines)
-├── .clinerules                     # Claude Code rules (464 lines)
+├── CLAUDE.md                       # Claude Code rules (414 lines)
+├── .cursor/rules/                  # Cursor 2026 rules (MDC format)
+│   ├── deerflow-core.mdc           # Core rules for Cursor
+│   ├── deerflow-security.mdc       # Security rules for Cursor
+│   └── deerflow-workflow.mdc       # Workflow rules for Cursor
 ├── .github/
 │   └── copilot-instructions.md     # GitHub Copilot rules (447 lines)
 ├── .codex/
@@ -481,7 +485,7 @@ Deerflow provides dedicated rule files for the most popular AI coding agents, wi
 |-------|-----------|-------|--------|----------|
 | **Cursor** | `.cursorrules` | 470 | ✅ Full Support | File operations, multi-file editing, agent mode |
 | **Windsurf** | `.windsurfrules` | 456 | ✅ Full Support | Cascade flow rules, context management |
-| **Claude Code** | `.clinerules` | 464 | ✅ Full Support | Tool usage rules, file operation safety |
+| **Claude Code** | `CLAUDE.md` | 414 | ✅ Full Support | Tool usage rules, file operation safety |
 | **GitHub Copilot** | `.github/copilot-instructions.md` | 447 | ✅ Full Support | Code completion rules, chat rules |
 | **OpenAI Codex** | `.codex/instructions.md` | 460 | ✅ Full Support | Code generation rules, context awareness |
 | **Any Agent** | `core/rules/master-rules.md` | 678 | ✅ Reference | Universal rules, paste into any agent |
@@ -701,8 +705,8 @@ See the [Configuration Guide](docs/CONFIGURATION.md) for full details on all opt
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/deerflow-agent-framework.git
-cd deerflow-agent-framework
+git clone https://github.com/ntd25022006q/deerflow--agent-framework.git
+cd deerflow--agent-framework
 
 # Run the setup script
 chmod +x scripts/setup.sh

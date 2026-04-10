@@ -462,7 +462,7 @@ All PRs require review with focus on:
 
 AI agents are configured to self-enforce rules via:
 
-- Tool-specific rule files (`.cursorrules`, `.windsurfrules`, `.clinerules`, etc.)
+- Tool-specific rule files (`.cursorrules`, `.windsurfrules`, `CLAUDE.md`, etc.)
 - Master rules document (`core/rules/master-rules.md`)
 - Pre-generation checklists
 - Post-generation verification steps

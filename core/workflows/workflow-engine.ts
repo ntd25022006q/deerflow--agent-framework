@@ -1172,6 +1172,7 @@ export class ComplexityScorer {
         score += 3;
         indicators.push(`Low complexity indicator: "${indicator}"`);
       }
+    }
 
     // Word count factor
     const wordCount = description.split(/\s+/).length;

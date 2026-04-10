@@ -1,14 +1,14 @@
 # Using Deerflow with Claude Code
 
 > **Agent:** Claude Code (Anthropic)  
-> **Rule File:** `.clinerules`  
+> **Rule File:** `CLAUDE.md`  
 > **Status:** Full Support ✅
 
 ---
 
 ## Overview
 
-Claude Code is Anthropic's CLI-based AI coding agent. Deerflow provides dedicated rules for Claude Code through the `.clinerules` file, which Claude reads at the start of every session.
+Claude Code is Anthropic's CLI-based AI coding agent. Deerflow provides dedicated rules for Claude Code through the `CLAUDE.md` file, which Claude reads at the start of every session.
 
 ## Setup
 
@@ -25,11 +25,11 @@ When prompted, select **Claude Code** as your AI editor.
 ### Step 2: Verify Installation
 
 ```bash
-# Confirm .clinerules exists in your project root
-ls -la .clinerules
+# Confirm CLAUDE.md exists in your project root
+ls -la CLAUDE.md
 
 # Read the first few lines to verify
-head -20 .clinerules
+head -20 CLAUDE.md
 ```
 
 ### Step 3: Start Claude Code
@@ -106,7 +106,7 @@ Claude will:
 
 ## Claude Code-Specific Rules
 
-The `.clinerules` file includes Claude Code-specific directives:
+The `CLAUDE.md` file includes Claude Code-specific directives:
 
 ### Tool Usage Rules
 
@@ -192,20 +192,20 @@ If Claude Code doesn't seem to follow Deerflow rules:
 
 1. **Check the file exists:**
    ```bash
-   ls -la .clinerules
+   ls -la CLAUDE.md
    ```
 
 2. **Check the file is in the project root:**
    ```bash
-   # Should be at /path/to/project/.clinerules
-   # NOT at /path/to/project/src/.clinerules
+   # Should be at /path/to/project/CLAUDE.md
+   # NOT at /path/to/project/src/CLAUDE.md
    ```
 
 3. **Restart Claude Code** after copying the file
 
 4. **Ask Claude directly:**
    ```
-   Please read and follow the rules in .clinerules
+   Please read and follow the rules in CLAUDE.md
    ```
 
 ### Claude Creates Too Many Files at Once

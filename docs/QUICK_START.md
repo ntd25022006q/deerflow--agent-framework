@@ -195,7 +195,7 @@ The `.windsurfrules` file is automatically placed in your project root. Windsurf
 
 ### Claude Code
 
-The `.clinerules` file is automatically placed in your project root. Claude Code reads this file at session start.
+The `CLAUDE.md` file is automatically placed in your project root. Claude Code reads this file at session start.
 
 **Verification:** Start a Claude Code session in your project directory and ask: "What rules do you follow?"
 
@@ -307,7 +307,7 @@ If you prefer manual setup:
 ```bash
 # Copy rule files to your project
 cp deerflow-agent-framework/.cursorrules ~/my-project/
-cp deerflow-agent-framework/.clinerules ~/my-project/
+cp deerflow-agent-framework/CLAUDE.md ~/my-project/
 
 # Copy configuration
 cp deerflow-agent-framework/config/deerflow.config.json ~/my-project/
@@ -537,7 +537,7 @@ chmod +x .husky/*
 Make sure the rule file is in the project root:
 - Cursor: `.cursorrules` in project root
 - Windsurf: `.windsurfrules` in project root
-- Claude Code: `.clinerules` in project root
+- Claude Code: `CLAUDE.md` in project root
 - Copilot: `.github/copilot-instructions.md`
 - Codex: `.codex/instructions.md`
 

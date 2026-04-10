@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Master Rules Document** (`core/rules/master-rules.md`) — Single source of truth with 34 problem categories (PC-001 through PC-034), 4-level severity framework (Critical/High/Medium/Low), 5 enforcement mechanism levels, and complete remediation procedures
 - **Cursor Rules** (`.cursorrules`) — 470 lines of Cursor AI-specific enforcement rules with multi-file editing constraints and agent mode safety
 - **Windsurf Rules** (`.windsurfrules`) — 456 lines of Windsurf Cascade-specific rules with flow enforcement and context management directives
-- **Claude Code Rules** (`.clinerules`) — 464 lines of Claude Code-specific rules with tool usage constraints and file operation safety
+- **Claude Code Rules** (`CLAUDE.md`) — 414 lines of Claude Code-specific rules with tool usage constraints and file operation safety
+- **Cursor 2026 Rules** (`.cursor/rules/*.mdc`) — MDC format rules for Cursor's new rule system (core, security, workflow)
 - **GitHub Copilot Rules** (`.github/copilot-instructions.md`) — 447 lines of Copilot-specific rules for code completion and chat
 - **OpenAI Codex Rules** (`.codex/instructions.md`) — 460 lines of Codex-specific rules for code generation with context awareness
 
@@ -106,4 +107,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | Total documentation words | 30,000+ |
 | Total code lines | 8,000+ |
 
-[1.0.0]: https://github.com/your-username/deerflow-agent-framework/releases/tag/v1.0.0
+[1.0.0]: https://github.com/ntd25022006q/deerflow--agent-framework/releases/tag/v1.0.0

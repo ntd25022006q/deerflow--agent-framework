@@ -605,7 +605,7 @@ post_scaffold_setup() {
   chmod +x "scripts/quality-check.sh"
 
   # ── Copy rule files ─────────────────────────────────────────
-  for rule in .cursorrules .windsurfrules .clinerules; do
+  for rule in .cursorrules .windsurfrules CLAUDE.md; do
     if [[ -f "$FRAMEWORK_DIR/$rule" ]]; then
       cp "$FRAMEWORK_DIR/$rule" "$rule"
     fi

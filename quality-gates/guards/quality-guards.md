@@ -399,7 +399,7 @@ Push/PR → [Code Quality] [Security Audit] [Test Suite] [Build Check] [Architec
 
 ### Level 5: AI Agent (Real-Time Assistance)
 
-- AI coding assistants are configured via `.cursorrules`, `.windsurfrules`, `.clinerules`, and `copilot-instructions.md`.
+- AI coding assistants are configured via `.cursorrules`, `.windsurfrules`, `CLAUDE.md`, and `copilot-instructions.md`.
 - All quality thresholds are embedded in AI assistant rules.
 - AI agents are instructed to enforce quality standards during code generation.
 
@@ -483,7 +483,7 @@ All AI coding assistants are configured to enforce quality guards in real-time:
 
 - **Cursor** (`.cursorrules`): Full quality standards embedded in master rules.
 - **Windsurf** (`.windsurfrules`): Cascade flow rules include quality checkpoints.
-- **Claude Code** (`.clinerules`): Tool-specific quality enforcement directives.
+- **Claude Code** (`CLAUDE.md`): Tool-specific quality enforcement directives.
 - **GitHub Copilot** (`copilot-instructions.md`): Completion and chat quality rules.
 - **OpenAI Codex** (`codex/instructions.md`): Code generation quality constraints.
 
