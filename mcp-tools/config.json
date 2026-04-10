@@ -1,60 +1,14 @@
 {
   "mcpServers": {
-    "deerflow-enforcer": {
-      "command": "npx",
-      "args": ["-y", "deerflow-mcp-server"],
-      "env": {
-        "DEERFLOW_STRICT_MODE": "true",
-        "DEERFLOW_MAX_CYCLOMATIC": "10",
-        "DEERFLOW_MAX_FILE_LINES": "300",
-        "DEERFLOW_MAX_FUNCTION_LINES": "50",
-        "DEERFLOW_MIN_TEST_COVERAGE": "80",
-        "DEERFLOW_FORBID_ANY_TYPE": "true",
-        "DEERFLOW_FORBID_MOCK_DATA": "true",
-        "DEERFLOW_REQUIRE_JSDOC": "true",
-        "DEERFLOW_ENFORCE_SOLID": "true",
-        "DEERFLOW_SECURITY_SCAN": "true"
-      }
+    "deerflow-quality": {
+      "command": "bash",
+      "args": ["./scripts/quality-check.sh", "--ci"],
+      "description": "Runs all Deerflow quality checks — lint, type check, tests, security, performance, architecture"
     },
-    "deerflow-linter": {
-      "command": "npx",
-      "args": ["-y", "deerflow-mcp-linter"],
-      "env": {
-        "RULES_PATH": "./core/rules/master-rules.json",
-        "STRICT_MODE": "true",
-        "AUTO_FIX": "false",
-        "FAIL_ON_WARNING": "true"
-      }
-    },
-    "deerflow-tester": {
-      "command": "npx",
-      "args": ["-y", "deerflow-mcp-tester"],
-      "env": {
-        "FRAMEWORK": "vitest",
-        "COVERAGE_THRESHOLD": "80",
-        "RUN_ON_CHANGE": "true",
-        "MAX_TEST_TIME": "30000"
-      }
-    },
-    "deerflow-dependency-guard": {
-      "command": "npx",
-      "args": ["-y", "deerflow-mcp-dep-guard"],
-      "env": {
-        "AUDIT_ON_INSTALL": "true",
-        "BLOCK_VULNERABLE": "true",
-        "LOCK_VERSIONS": "true",
-        "CHECK_PEER_DEPS": "true"
-      }
-    },
-    "deerflow-architecture": {
-      "command": "npx",
-      "args": ["-y", "deerflow-mcp-arch"],
-      "env": {
-        "ENFORCE_CLEAN_ARCH": "true",
-        "MAX_COUPLING": "5",
-        "DETECT_CYCLES": "true",
-        "CHECK_LAYER_VIOLATIONS": "true"
-      }
+    "deerflow-security": {
+      "command": "bash",
+      "args": ["./security/dependency-check.sh"],
+      "description": "Runs security and dependency audit — npm audit, outdated deps, lock file consistency, peer deps, license compliance"
     }
   }
 }

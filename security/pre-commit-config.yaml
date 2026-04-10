@@ -51,9 +51,9 @@ repos:
         verbose: true
 
       - id: deerflow-import-order
-        name: DEERFLOW Import Order Check
-        description: Validates that imports are organized in the correct order: external, internal, relative
-        entry: scripts/hooks/import-order.sh
+        name: "DEERFLOW Import Order Check"
+        description: "Validates that imports are organized in the correct order: external, internal, relative"
+        entry: "scripts/hooks/import-order.sh"
         language: script
         types: [typescript, javascript]
         verbose: true

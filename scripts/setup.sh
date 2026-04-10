@@ -181,7 +181,7 @@ copy_configs() {
       rule_files=(".windsurfrules")
       ;;
     claude)
-      rule_files=(".clinerules")
+      rule_files=("CLAUDE.md")
       ;;
     copilot)
       rule_files=(".github/copilot-instructions.md")
@@ -190,7 +190,7 @@ copy_configs() {
       rule_files=(".codex/instructions.md")
       ;;
     all)
-      rule_files=(".cursorrules" ".windsurfrules" ".clinerules")
+      rule_files=(".cursorrules" ".windsurfrules" "CLAUDE.md")
       ;;
   esac
 
@@ -202,6 +202,39 @@ copy_configs() {
       log_warn "Rule file not found at source: $rule"
     fi
   done
+
+  # ── Claude Code — CLAUDE.md ─────────────────────────────────
+  if [[ "$EDITOR_CHOICE" == "claude" ]] || [[ "$EDITOR_CHOICE" == "all" ]]; then
+    if [[ -f "$PROJECT_ROOT/CLAUDE.md" ]]; then
+      log_success "Detected Claude Code CLAUDE.md"
+      record_check "Claude Code" "pass" "CLAUDE.md available"
+    else
+      log_warn "CLAUDE.md not found — Claude Code rules not installed"
+      record_check "Claude Code" "fail" "CLAUDE.md missing"
+    fi
+  fi
+
+  # ── Cursor — .cursor/rules/*.mdc ─────────────────────────────
+  if [[ "$EDITOR_CHOICE" == "cursor" ]] || [[ "$EDITOR_CHOICE" == "all" ]]; then
+    if [[ -d "$PROJECT_ROOT/.cursor/rules" ]]; then
+      local mdc_count=0
+      for mdc_file in "$PROJECT_ROOT/.cursor/rules/"*.mdc; do
+        if [[ -f "$mdc_file" ]]; then
+          mdc_count=$((mdc_count + 1))
+        fi
+      done
+      if [[ "$mdc_count" -gt 0 ]]; then
+        log_success "Detected Cursor .cursor/rules/ ($mdc_count .mdc files)"
+        record_check "Cursor Rules" "pass" "$mdc_count .mdc files in .cursor/rules/"
+      else
+        log_warn ".cursor/rules/ directory exists but has no .mdc files"
+        record_check "Cursor Rules" "fail" ".cursor/rules/ is empty"
+      fi
+    else
+      log_warn ".cursor/rules/ directory not found — Cursor rules not installed"
+      record_check "Cursor Rules" "fail" ".cursor/rules/ missing"
+    fi
+  fi
 
   # ── Copydeerflow config ────────────────────────────────────
   if [[ -f "$PROJECT_ROOT/config/deerflow.config.json" ]]; then
@@ -572,7 +605,7 @@ interactive_setup() {
 
   # ── AI Editor Selection ─────────────────────────────────────
   EDITOR_CHOICE=$(ask_choice "Which AI editor do you use?" \
-    "cursor" "windsurf" "claude" "copilot" "codex" "all")
+    "cursor" "claude" "windsurf" "copilot" "codex" "all")
   log_info "Selected editor: $EDITOR_CHOICE"
 
   # ── Project Type ────────────────────────────────────────────
@@ -688,6 +721,17 @@ REPORT_EOF
   echo "  2. Run './scripts/quality-check.sh --full' for a full audit"
   echo "  3. Start coding — your AI agent will enforce quality standards"
   echo ""
+  log_info "Editor-specific notes:"
+  if [[ "$EDITOR_CHOICE" == "claude" ]] || [[ "$EDITOR_CHOICE" == "all" ]]; then
+    echo "  Claude Code: Rules loaded from CLAUDE.md at project root"
+  fi
+  if [[ "$EDITOR_CHOICE" == "cursor" ]] || [[ "$EDITOR_CHOICE" == "all" ]]; then
+    echo "  Cursor: Rules loaded from .cursor/rules/*.mdc (auto-apply)"
+  fi
+  if [[ "$EDITOR_CHOICE" == "windsurf" ]] || [[ "$EDITOR_CHOICE" == "all" ]]; then
+    echo "  Windsurf: Rules loaded from .windsurfrules"
+  fi
+  echo ""
 }
 
 # ═══════════════════════════════════════════════════════════════
@@ -712,7 +756,7 @@ main() {
         echo "  --ci              Enable CI/CD pipeline setup"
         echo "  --security        Enable security scanning"
         echo "  --skip-prompts    Use defaults for all prompts"
-        echo "  --editor=NAME     Skip editor prompt (cursor|windsurf|claude|copilot|codex|all)"
+        echo "  --editor=NAME     Skip editor prompt (cursor|claude|windsurf|copilot|codex|all)"
         echo "  --type=TYPE       Skip type prompt (nextjs|react|node|python|fullstack)"
         echo "  -h, --help        Show this help"
         exit 0

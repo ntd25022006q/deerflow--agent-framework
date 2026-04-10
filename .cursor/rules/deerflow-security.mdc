@@ -1,0 +1,230 @@
+---
+description: Deerflow Security Rules - OWASP compliance and security enforcement
+globs:
+alwaysApply: true
+---
+
+# DEERFLOW SECURITY ENFORCEMENT v1.0
+
+> Zero-trust security model. Every input is hostile until validated. Every dependency is vulnerable until audited. Every endpoint is exposed until protected.
+
+---
+
+## Zero-Trust Principles
+
+1. **Never Trust Any Input** — validate, sanitize, and type ALL data before processing: user forms, API payloads, file uploads, env vars, DB records, webhooks.
+2. **Verify Everything** — type guards over assertions, validate external service responses against schemas, DB constraints are safety nets not primary validation.
+3. **Least Privilege** — minimum permissions for every process, service, user, API key. Non-root containers. Scoped CI tokens.
+4. **Defense in Depth** — multiple independent layers: boundary validation, business rule validation, DB constraints, monitoring.
+
+### Trust Boundaries
+
+| Boundary | Validation Required |
+|----------|-------------------|
+| User Interface | Schema validation, file type/size checks |
+| API Gateway | Authentication, rate limiting, input sanitization |
+| Internal Services | mTLS, service-to-service auth, message validation |
+| Database | Parameterized queries, row-level security |
+| External APIs | Response schema validation, timeout enforcement |
+| File System | Path traversal prevention, permission checks |
+| Environment | Encryption at rest, access logging, rotation |
+
+---
+
+## OWASP Top 10 Enforcement
+
+### A01: Broken Access Control — CRITICAL
+- Authorization middleware on EVERY route handling sensitive data
+- Resource-level checks (not just route-level): admin can delete anyone, users delete themselves only
+- Never expose internal IDs or use sequential/predictable identifiers
+
+### A02: Cryptographic Failures — CRITICAL
+- AES-256-GCM for data at rest, TLS 1.3 for data in transit
+- NEVER use MD5, SHA1, DES, RC4
+- bcrypt with cost factor 12+ for passwords
+- Keys in secret manager (Vault/KMS), never in source code, rotate annually
+
+### A03: Injection — CRITICAL
+- Parameterized queries or ORM exclusively — NEVER string concatenation in SQL
+- `execFile()` instead of `exec()` for shell commands
+- Sanitize all inputs before rendering (DOMPurify if innerHTML required)
+- Never use `eval()`, `new Function()`, `setTimeout(string)`, `document.write()`
+
+### A04: Insecure Design — HIGH
+- Threat model for every new feature
+- Rate limiting, input validation, error handling on every endpoint
+- Never expose stack traces or internal errors in production responses
+
+### A05: Security Misconfiguration — HIGH
+- Helmet.js with strict CSP configuration on every Express/Koa/Fastify app
+- Debug mode OFF in production
+- Default credentials changed on all services
+- Security headers: CSP, X-Frame-Options: DENY, X-Content-Type-Options: nosniff, HSTS (1yr+), Referrer-Policy: strict-origin-when-cross-origin
+
+### A06: Vulnerable Components — HIGH
+- `npm audit` after every install — block Critical/High CVEs
+- Dependabot/Renovate for automated updates
+- License compliance: MIT/Apache/BSD approved; GPL/AGPL/SSPL prohibited
+
+### A07: Authentication Failures — CRITICAL
+- OAuth 2.0 / OpenID Connect with established libraries
+- Short-lived access tokens (15min) + longer refresh tokens (7d) in HTTP-only, Secure, SameSite=Strict cookies
+- NEVER store tokens in localStorage
+- MFA for critical operations
+- Password policy: min 12 chars, uppercase, lowercase, number, special char
+
+### A08: Data Integrity Failures — HIGH
+- Sign release artifacts with GPG
+- `npm ci` in CI (never `npm install`)
+- Verify package integrity with `npm verify`
+- Never deserialize untrusted data with code-executing revivers
+
+### A09: Security Logging Failures — MEDIUM
+- Log all auth events (login, logout, failure) with userId, IP, user-agent, timestamp
+- Log all authorization failures with resource, action, reason
+- NEVER log sensitive data (passwords, tokens, credit cards, SSNs, PII)
+- Structured JSON logging format
+
+### A10: SSRF — CRITICAL
+- Validate ALL user-supplied URLs: protocol (HTTPS only), hostname allowlist, block private networks (localhost, 192.168.x, 10.x)
+- Never fetch arbitrary URLs from user input without validation
+
+---
+
+## Code Security Patterns
+
+### Input Validation (Zod)
+```typescript
+const CreateUserSchema = z.object({
+  email: z.string().email().max(254),
+  password: z.string().min(12).max(128),
+  name: z.string().min(1).max(100).regex(/^[a-zA-Z\s'-]+$/),
+}).strict();
+```
+
+### Password Hashing
+```typescript
+import bcrypt from 'bcrypt';
+const SALT_ROUNDS = 12;
+async function hashPassword(plain: string): Promise<string> {
+  return bcrypt.hash(plain, SALT_ROUNDS);
+}
+```
+
+### Session Configuration
+```typescript
+const sessionConfig = {
+  cookieName: 'session',
+  secret: Config.require('SESSION_SECRET'), // min 32 chars
+  duration: 15 * 60 * 1000, // 15 minutes
+  cookie: { httpOnly: true, secure: true, sameSite: 'strict', path: '/', maxAge: 7 * 24 * 60 * 60 }
+};
+```
+
+### CORS Configuration
+```typescript
+app.use(cors({
+  origin: Config.require('ALLOWED_ORIGINS').split(','),
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  credentials: true,
+  maxAge: 86400,
+}));
+```
+
+### Rate Limiting
+```typescript
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 100, // 100 requests per window
+});
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // 5 login attempts
+  skipSuccessfulRequests: true,
+});
+```
+
+---
+
+## Data Protection
+
+### PII Classification
+
+| Classification | Examples | Storage | Logging |
+|---------------|----------|---------|---------|
+| Public | Username, avatar URL | Encrypted | Allowed |
+| Internal | Email, phone | Encrypted | Hashed/masked |
+| Confidential | SSN, credit card, health | AES-256-GCM | NEVER |
+| Restricted | Passwords, biometrics | Salted bcrypt | NEVER stored |
+
+### Encryption Standards
+- **At rest:** AES-256-GCM with proper IV, keys from KMS/Vault
+- **In transit:** TLS 1.3, certificate pinning for mobile, HSTS 1yr+
+- **Key rotation:** annually minimum, via KMS dynamic secret engine
+
+### Data Retention
+- User data: account duration + 30 days
+- Session data: 7 days inactivity
+- Audit logs: 2 years
+- App logs: 90 days
+- Analytics: 1 year (anonymize after 90 days)
+
+---
+
+## Pre-Commit Security Checks
+
+1. **gitleaks** — scans for 32+ secret patterns (AWS, GitHub, Stripe, SendGrid, JWT, private keys, connection strings)
+2. **Hardcoded credential detection** — blocks `password = "..."`, `apiKey = process.env.X || "fallback"`, connection strings with embedded creds
+3. **Debug endpoint detection** — blocks unguarded debug/diagnostic routes
+4. **eval()/innerHTML detection** — AST-based analysis, blocks all variants
+5. **No .env files committed** — `.env` and `.env.*` patterns in .gitignore
+
+---
+
+## Dependency Security
+
+- `npm audit` blocks Critical/High CVEs at install time
+- Lock file integrity: `npm ci` in CI, lock file committed with package.json
+- License compliance: whitelist MIT/Apache/BSD/ISC, prohibit GPL/AGPL/SSPL
+- Vulnerability SLAs: Critical 24hr, High 72hr, Medium 2 weeks, Low next update
+
+---
+
+## Infrastructure Security
+
+### Docker Rules
+- Multi-stage builds always
+- Non-root user always (`USER appuser`)
+- Pin base image versions (never `latest`)
+- HEALTHCHECK instruction required
+- No secrets in images — use `.dockerignore`
+- Scan with Trivy before deployment
+
+### Container Scanning
+- **Trivy:** OS package vulnerabilities
+- **Snyk Container:** application dependency vulnerabilities
+- **Dockle:** Dockerfile best practices
+- Critical/High vulnerabilities block deployment
+
+### Network Security
+- mTLS for all inter-service communication
+- TLS with cert verification for DB connections
+- Kubernetes network policies restrict pod-to-pod communication
+- Egress restricted to allowlisted external services
+
+---
+
+## Incident Response
+
+| Level | Name | Response Time |
+|-------|------|---------------|
+| SEV-1 | Active breach/data exfiltration | 15 minutes |
+| SEV-2 | Vulnerability actively exploited | 1 hour |
+| SEV-3 | Vulnerability discovered, not exploited | 4 hours |
+| SEV-4 | Policy violation, minor misconfiguration | 24 hours |
+
+Response: Detection → Triage → Containment → Eradication → Recovery → Blameless Post-Mortem (within 5 business days)
+
+---
+
+*Full security details: `security/security-rules.md`*

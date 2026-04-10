@@ -24,7 +24,15 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # ─── Read commit message ─────────────────────────────────────
-COMMIT_MSG_FILE="$1"
+COMMIT_MSG_FILE="${1:-}"
+if [[ -z "$COMMIT_MSG_FILE" ]]; then
+  echo "Usage: commit-msg <commit-msg-file>" >&2
+  exit 1
+fi
+if [[ ! -f "$COMMIT_MSG_FILE" ]]; then
+  echo "Error: commit message file '$COMMIT_MSG_FILE' not found" >&2
+  exit 1
+fi
 COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
 
 # ─── Valid commit types ──────────────────────────────────────

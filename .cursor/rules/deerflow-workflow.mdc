@@ -1,0 +1,158 @@
+---
+description: Deerflow Agentic Workflow - 8-phase mandatory workflow for code changes
+globs:
+alwaysApply: true
+---
+
+# DEERFLOW AGENTIC WORKFLOW v1.0
+
+> **Philosophy:** "Think First, Code Later" — spend at least 30% of budget on analysis before coding.
+> **Rule:** Skipping ANY phase is a CRITICAL violation. Every phase has a mandatory quality gate.
+
+---
+
+## Phase 0: Context Acquisition (MANDATORY — Before ANY Code)
+
+You MUST complete ALL steps before writing a single line of code:
+
+1. **Map project structure** — glob and LS to list root, src/, all *.ts/*.tsx, test files, config files, docs.
+2. **Analyze package.json** — dependencies, devDependencies, scripts, engines, module system (ESM/CJS).
+3. **Map component/module hierarchy** — trace tree from root to leaves, identify routing structure, state management patterns.
+4. **Trace data flow** — user action → event handler → state update → re-render → DOM update; API request → controller → service → repository → DB.
+5. **Check existing tests** — test files, patterns used, which modules are covered/uncovered, test utilities/factories.
+6. **Review git history** — `git log --oneline -20`, `git log --stat -5`, `git branch -a`, `git status`.
+7. **Read documentation** — README.md, CONTRIBUTING.md, ADR files, JSDoc on key modules.
+
+**PROHIBITION:** Writing code before completing ALL Phase 0 steps is a CRITICAL defect.
+
+---
+
+## Phase 1: Requirement Analysis
+
+Transform the user's request into a formal specification:
+
+1. **Parse requirements** — primary goal, scope boundaries (in/out), constraints, assumptions.
+2. **Functional Requirements (FR-001, FR-002...)** — numbered, independently testable, MoSCoW priority (MUST/SHOULD/COULD/WON'T), with rationale and verification method.
+3. **Non-Functional Requirements (NFR-001...)** — per ISO/IEC 25010: performance, reliability, security, maintainability, accessibility, compatibility.
+4. **Use Cases (UC-XXX)** — actor, preconditions, main flow, alternative flows, postconditions, exceptions.
+5. **Edge Cases** — boundary values, null/undefined, concurrent access, network failures, permission errors, data integrity, encoding issues.
+6. **Acceptance Criteria (AC-XXX)** — Given/When/Then format for each requirement.
+
+---
+
+## Phase 2: Architecture Design
+
+Create a technical blueprint:
+
+1. **Component Architecture** — name, type (Page/Feature/UI Primitive/Service/Utility/Hook/Middleware), responsibilities, dependencies, consumers, file location.
+2. **Interface Contracts** — all public interfaces defined BEFORE implementation, `I` prefix, JSDoc on every member, no `any`.
+3. **Data Models** — entities with typed fields, validation rules, relationships, index requirements, immutability (`readonly`), pagination, soft-delete vs hard-delete.
+4. **API Contracts** — method, path, request headers/body, response schemas (200 and 4xx), authentication, rate limiting.
+5. **State Management** — UI state (component), feature state (Zustand/Redux), server state (React Query/SWR), auth state (HTTP-only cookies), form state (React Hook Form).
+6. **Error Handling Architecture** — typed hierarchy (AppError base), context preservation, correlation IDs, no sensitive info in production errors.
+7. **OWASP Security Review** — check A01-A10 with explicit pass/fail for each.
+
+**Output:** Architecture Decision Record (ADR).
+
+---
+
+## Phase 3: Implementation Planning
+
+Break architecture into atomic tasks:
+
+1. **Task Decomposition** — each task: CREATE|MODIFY|DELETE|CONFIG|TEST|DOC, files affected, dependencies, complexity (LOW/MEDIUM/HIGH/CRITICAL), verification criteria, risks, rollback strategy.
+2. **Dependency DAG** — no cycles, foundation first (types/interfaces/constants), core next (services/repos), UI third (components/pages), polish last (tests/docs).
+3. **Execution Order** — topological sort + risk-based priority (high-risk tasks first).
+4. **Verification Criteria** — per task: TypeScript compiles, ESLint zero warnings, unit tests pass, no new circular deps, imports resolve.
+5. **Shared Utilities** — identify and create FIRST: type guards, validators, error helpers, test factories, constants, enums.
+6. **Backward-Compatible Migration** — identify consumers, plan migration path, document breaking changes.
+
+**Output:** Ordered TODO list = execution checklist.
+
+---
+
+## Phase 4: Code Implementation (With Micro-Verification)
+
+1. **ONE FILE AT A TIME** — max 5 files without intermediate verification.
+   - Order: types → constants → utilities → services → hooks → components (leaf→composite) → pages → tests
+2. **After EACH file → verify compilation:** `npx tsc --noEmit`. Fix immediately on failure.
+3. **After EACH file → run related tests:** `npx vitest run path/to/file.test.ts`
+4. **Every 3–5 files → full test suite:** `npm run test && npm run lint && npx tsc --noEmit`
+5. **Import consistency** — path aliases, max 2 levels relative, grouped (external→internal→relative), alphabetical within groups.
+6. **Naming conventions** — PascalCase components, camelCase functions, SCREAMING_SNAKE_CASE constants, `I` prefix interfaces.
+7. **Inline documentation** — JSDoc/TSDoc on every exported function, class, interface, type.
+
+---
+
+## Phase 5: Verification & Testing
+
+1. **Full test suite:** `npm run test` — all pass, zero failures, zero skipped (unless documented).
+2. **TypeScript:** `npx tsc --noEmit` — zero errors, zero warnings.
+3. **ESLint:** `npx eslint . --max-warnings=0` — warnings treated as errors.
+4. **Bundle size:** new code < 50KB gzipped per feature.
+5. **Circular deps:** `npx madge --circular --extensions ts,tsx src/` — zero cycles.
+6. **Security:** `npm audit --production` — zero critical/high vulnerabilities.
+7. **Responsive design (UI):** 320px, 768px, 1280px+ — layout, text readability, touch targets, image scaling.
+8. **Accessibility (UI):** WCAG 2.1 AA — alt text, form labels, 4.5:1 contrast, keyboard nav, focus indicators, ARIA.
+
+---
+
+## Phase 6: Integration Check
+
+1. **Import resolution** — all paths valid, barrel exports intact, no default/named mismatches.
+2. **No orphaned files** — every file imported somewhere, no dead code, no TODO without tracking.
+3. **Dependencies verified** — all packages in package.json, no undocumented installs, peer deps satisfied.
+4. **Cross-component test** — components render composed, data flows correctly, state propagates, API calls reach backend.
+5. **E2E flow trace** — user action → processing → data storage → UI update → error handling → edge cases.
+
+---
+
+## Phase 7: Documentation
+
+1. **API docs** — JSDoc/TSDoc for new public APIs, breaking change migration instructions.
+2. **Component docs** — JSDoc, props with types/defaults, usage examples, Storybook stories.
+3. **CHANGELOG** — Keep a Changelog format: Added/Changed/Fixed/Deprecated with requirement refs.
+4. **Migration notes** — step-by-step instructions, before/after examples, effort estimate.
+
+---
+
+## Quality Gates (Between Each Phase)
+
+| Gate | Critical Criteria |
+|------|-------------------|
+| 0→1 | File tree mapped, deps analyzed, component hierarchy identified, data flow traced |
+| 1→2 | FR-NNN defined, NFR-NNN defined, acceptance criteria written, edge cases identified |
+| 2→3 | Components defined, interfaces designed, data models defined, OWASP review done |
+| 3→4 | Tasks atomic, DAG no cycles, execution order defined, verification criteria set |
+| 4→5 | TypeScript compiles, ESLint clean, new+existing tests pass, imports consistent |
+| 5→6 | Full test suite 100% pass, zero type errors, zero lint warnings, no circular deps |
+| 6→7 | All imports resolve, no orphaned files, no missing deps, integration verified |
+
+**If a gate FAILS, go back to the appropriate phase and fix before proceeding.**
+
+---
+
+## Rollback Procedures
+
+1. **Git checkpoint before each phase:** `git add -A && git commit -m "checkpoint: before Phase N"`
+2. **Diagnosis:** compilation → check TS errors; test failure → read assertion; integration → check contracts; performance → profile.
+3. **Recovery:** `git reset --soft <commit-hash>` to preserve work, or `--hard` to discard. Document lessons learned, re-plan from failing phase.
+
+---
+
+## Complexity Management
+
+| Phase | Budget % | Notes |
+|-------|----------|-------|
+| Phase 0: Context | 15–25% | Scale with codebase size |
+| Phase 1: Requirements | 10–15% | Scale with complexity |
+| Phase 2: Architecture | 10–15% | Scale with system scope |
+| Phase 3: Planning | 5–10% | Minimal but essential |
+| Phase 4: Implementation | 30–40% | Largest phase |
+| Phase 5–7: Verify/Doc | 10–15% | Don't skimp on verification |
+
+**Create sub-tasks when:** modifying 10+ files, spanning multiple subsystems, complexity exceeds threshold, context window > 70% budget, or task involves unrelated concerns.
+
+---
+
+*Full workflow details: `core/workflows/agentic-workflow.md`*

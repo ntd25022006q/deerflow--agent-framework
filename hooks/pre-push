@@ -191,7 +191,7 @@ for dir in .next dist build out; do
       log_pass "Bundle size within limits"
     fi
     break
-  done
+  fi
 done
 
 # ═══════════════════════════════════════════════════════════════
