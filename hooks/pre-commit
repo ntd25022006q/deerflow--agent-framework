@@ -111,9 +111,18 @@ fi
 if [[ -n "$STAGED_JS_TS" ]]; then
   log_info "Running ESLint on staged files..."
 
-  ESLINT_CONFIG=$(find . -maxdepth 2 -name 'eslint.config.*' -o -name '.eslintrc*' 2>/dev/null | head -1)
+  ESLINT_CONFIG=$(find . -maxdepth 2 \( -name 'eslint.config.*' -o -name '.eslintrc*' \) 2>/dev/null | head -1)
   if command -v npx >/dev/null 2>&1 && [[ -n "$ESLINT_CONFIG" ]]; then
-    LINT_OUTPUT=$(echo "$STAGED_JS_TS" | xargs npx eslint --max-warnings=0 --quiet 2>&1) && {
+    # Detect flat config (eslint.config.*) vs legacy (.eslintrc*)
+    FLAT_CONFIG=false
+    if [[ "$(basename "$ESLINT_CONFIG")" == eslint.config.* ]]; then
+      FLAT_CONFIG=true
+    fi
+    LINT_CMD="npx eslint --max-warnings=0 --quiet"
+    if [[ "$FLAT_CONFIG" == "true" ]]; then
+      LINT_CMD="$LINT_CMD"
+    fi
+    LINT_OUTPUT=$(echo "$STAGED_JS_TS" | xargs $LINT_CMD 2>&1) && {
       log_pass "ESLint: all checks passed"
     } || {
       log_fail "ESLint found issues:"
