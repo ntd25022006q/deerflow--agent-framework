@@ -1,0 +1,195 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════
+# DEERFLOW PRE-COMMIT HOOK
+# Runs all mandatory checks before allowing a commit.
+# Checks: file safety, no secrets, lint, types, format
+# ═══════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+# ─── Colors ───────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
+log_fail() { echo -e "${RED}[FAIL]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_info() { echo -e "${BLUE}[HOOK]${NC} $1"; }
+
+# ─── Helpers ─────────────────────────────────────────────────
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM 2>/dev/null)
+STAGED_JS_TS=$(echo "$STAGED_FILES" | grep -E '\.(ts|tsx|js|jsx|mjs|cjs)$' || true)
+STAGED_JSON=$(echo "$STAGED_FILES" | grep -E '\.(json|md|mdx|yml|yaml)$' || true)
+HAS_STAGED=false
+[[ -n "$STAGED_FILES" ]] && HAS_STAGED=true
+
+if [[ "$HAS_STAGED" != "true" ]]; then
+  log_info "No staged files — nothing to check"
+  exit 0
+fi
+
+ERRORS=0
+
+# ─── 1. FILE SAFETY CHECK ────────────────────────────────────
+log_info "Checking file safety..."
+
+# Block dangerous file types
+DANGEROUS_FILES=$(echo "$STAGED_FILES" | grep -E '\.(exe|dll|so|dylib|bin|pem|key|p12|pfx|keystore)$' || true)
+if [[ -n "$DANGEROUS_FILES" ]]; then
+  log_fail "Dangerous files staged for commit:"
+  echo "$DANGEROUS_FILES" | while read -r f; do log_fail "  — $f"; done
+  ERRORS=$((ERRORS + 1))
+else
+  log_pass "No dangerous file types"
+fi
+
+# Block files in sensitive paths
+SENSITIVE_PATHS=$(echo "$STAGED_FILES" | grep -E '^(\.env|\.env\..+|credentials|secrets|id_rsa|id_ed25519|\.ssh/)' || true)
+if [[ -n "$SENSITIVE_PATHS" ]]; then
+  log_fail "Sensitive files staged for commit:"
+  echo "$SENSITIVE_PATHS" | while read -r f; do log_fail "  — $f"; done
+  ERRORS=$((ERRORS + 1))
+else
+  log_pass "No sensitive file paths"
+fi
+
+# ─── 2. SECRETS DETECTION ────────────────────────────────────
+log_info "Scanning for secrets and credentials..."
+
+SECRET_PATTERNS=(
+  'PRIVATE.KEY'
+  'BEGIN\s+RSA\s+PRIVATE'
+  'BEGIN\s+OPENSSH\s+PRIVATE'
+  'AWS_SECRET_ACCESS_KEY\s*='
+  'AWS_ACCESS_KEY_ID\s*=\s*AKIA'
+  'password\s*=\s*["\x27][^"\x27]{8,}'
+  'secret\s*=\s*["\x27][^"\x27]{8,}'
+  'api[_-]?key\s*=\s*["\x27][^"\x27]{16,}'
+  'token\s*=\s*["\x27][^"\x27]{16,}'
+  'authorization\s*:\s*Bearer\s+[A-Za-z0-9\-._~+/]+=*'
+  'ghp_[A-Za-z0-9]{36}'
+  'gho_[A-Za-z0-9]{36}'
+  'ghu_[A-Za-z0-9]{36}'
+  'ghs_[A-Za-z0-9]{36}'
+  'github_pat_[A-Za-z0-9_]{22,}'
+  'xox[bpas]-[A-Za-z0-9\-]{10,}'
+  'AKIA[0-9A-Z]{16}'
+  'AIza[0-9A-Za-z\-_]{35}'
+  'sk-[A-Za-z0-9]{48}'
+  'hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/'
+)
+
+SECRETS_FOUND=0
+for pattern in "${SECRET_PATTERNS[@]}"; do
+  MATCHES=$(echo "$STAGED_FILES" | while read -r file; do
+    git diff --cached -U0 -- "$file" 2>/dev/null | grep -E "^(\+|\-).*${pattern}" || true
+  done)
+  if [[ -n "$MATCHES" ]]; then
+    log_fail "Secret pattern detected: '$pattern'"
+    echo "$MATCHES" | head -3 | while read -r line; do log_fail "  $line"; done
+    SECRETS_FOUND=$((SECRETS_FOUND + 1))
+  fi
+done
+
+if [[ "$SECRETS_FOUND" -gt 0 ]]; then
+  log_fail "FOUND $SECRETS_FOUND potential secret(s) — remove them before committing"
+  log_fail "If this is a false positive, use: git commit --no-verify"
+  ERRORS=$((ERRORS + 1))
+else
+  log_pass "No secrets detected"
+fi
+
+# ─── 3. ESLINT ───────────────────────────────────────────────
+if [[ -n "$STAGED_JS_TS" ]]; then
+  log_info "Running ESLint on staged files..."
+
+  if command -v npx >/dev/null 2>&1; then
+    LINT_OUTPUT=$(echo "$STAGED_JS_TS" | xargs npx eslint --max-warnings=0 --quiet 2>&1) && {
+      log_pass "ESLint: all checks passed"
+    } || {
+      log_fail "ESLint found issues:"
+      echo "$LINT_OUTPUT" | head -20
+      ERRORS=$((ERRORS + 1))
+    }
+  else
+    log_warn "ESLint not available — skipping"
+  fi
+else
+  log_pass "ESLint: no JS/TS files to lint"
+fi
+
+# ─── 4. TYPE CHECK ───────────────────────────────────────────
+if [[ -n "$STAGED_JS_TS" ]]; then
+  log_info "Running TypeScript type check..."
+
+  if command -v npx >/dev/null 2>&1 && [[ -f "tsconfig.json" ]]; then
+    npx tsc --noEmit 2>&1 && {
+      log_pass "TypeScript: no type errors"
+    } || {
+      log_fail "TypeScript: type errors found"
+      ERRORS=$((ERRORS + 1))
+    }
+  else
+    log_warn "TypeScript not configured — skipping type check"
+  fi
+else
+  log_pass "TypeScript: no TS files to check"
+fi
+
+# ─── 5. PRETTIER FORMAT CHECK ───────────────────────────────
+if [[ -n "$STAGED_FILES" ]]; then
+  log_info "Running Prettier format check..."
+
+  if command -v npx >/dev/null 2>&1; then
+    npx prettier --check $STAGED_FILES 2>&1 >/dev/null && {
+      log_pass "Prettier: all files formatted"
+    } || {
+      log_fail "Prettier: some files need formatting"
+      log_warn "Run: npx prettier --write $STAGED_FILES"
+      ERRORS=$((ERRORS + 1))
+    }
+  else
+    log_warn "Prettier not available — skipping"
+  fi
+fi
+
+# ─── 6. FILE SIZE CHECK ─────────────────────────────────────
+log_info "Checking file sizes (max 300 lines)..."
+
+OVERSIZED=0
+if command -v wc >/dev/null 2>&1; then
+  echo "$STAGED_FILES" | while read -r file; do
+    if [[ -f "$file" ]]; then
+      LINES=$(wc -l < "$file" 2>/dev/null || echo 0)
+      if [[ "$LINES" -gt 300 ]]; then
+        log_fail "  $file — $LINES lines (max 300)"
+        OVERSIZED=$((OVERSIZED + 1))
+      fi
+    fi
+  done
+fi
+
+if [[ "$OVERSIZED" -gt 0 ]]; then
+  ERRORS=$((ERRORS + 1))
+else
+  log_pass "All files under 300 lines"
+fi
+
+# ─── SUMMARY ─────────────────────────────────────────────────
+echo ""
+if [[ "$ERRORS" -gt 0 ]]; then
+  echo -e "${RED}╔══════════════════════════════════════════════════╗${NC}"
+  echo -e "${RED}║  🦌 DEERFLOW PRE-COMMIT: $ERRORS check(s) FAILED       ║${NC}"
+  echo -e "${RED}║  Fix the issues above before committing.          ║${NC}"
+  echo -e "${RED}║  To bypass: git commit --no-verify (not advised)   ║${NC}"
+  echo -e "${RED}╚══════════════════════════════════════════════════╝${NC}"
+  exit 1
+else
+  echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
+  echo -e "${GREEN}║  🦌 DEERFLOW PRE-COMMIT: ALL CHECKS PASSED ✓     ║${NC}"
+  echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+  exit 0
+fi

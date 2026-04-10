@@ -1,0 +1,234 @@
+title = 'Deerflow Secret Detection'
+version = '1.0.0'
+description = 'Comprehensive secret detection rules for the Deerflow Agent Framework'
+
+[[rules]]
+id = 'deerflow-api-key'
+description = 'Generic API Key Detection'
+regex = '''(?i)(?:api[_-]?key|apikey)[\s]*[=:]\s*['"]?[a-zA-Z0-9_\-]{20,}['"]?'''
+tags = ['key', 'deerflow']
+
+[[rules]]
+id = 'deerflow-aws-access-key'
+description = 'AWS Access Key ID'
+regex = '''AKIA[0-9A-Z]{16}'''
+tags = ['key', 'aws']
+
+[[rules]]
+id = 'deerflow-aws-secret-key'
+description = 'AWS Secret Access Key'
+regex = '''(?i)aws[_-]?secret[_-]?access[_-]?key[\s]*[=:]\s*['"]?[A-Za-z0-9/+=]{40}['"]?'''
+tags = ['key', 'aws']
+
+[[rules]]
+id = 'deerflow-aws-session-token'
+description = 'AWS Session Token'
+regex = '''(?i)aws[_-]?session[_-]?token[\s]*[=:]\s*['"]?[A-Za-z0-9/+=]{300,}['"]?'''
+tags = ['key', 'aws']
+
+[[rules]]
+id = 'deerflow-github-token'
+description = 'GitHub Personal Access Token or OAuth Access Token'
+regex = '''(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9_]{36,}'''
+tags = ['key', 'github']
+
+[[rules]]
+id = 'deerflow-github-app-token'
+description = 'GitHub App Token'
+regex = '''(?:gha|ghb|ghc)_[A-Za-z0-9_]{36,}'''
+tags = ['key', 'github']
+
+[[rules]]
+id = 'deerflow-gitlab-token'
+description = 'GitLab Personal Access Token'
+regex = '''glpat-[A-Za-z0-9\-\_]{20,}'''
+tags = ['key', 'gitlab']
+
+[[rules]]
+id = 'deerflow-stripe-secret-key'
+description = 'Stripe Secret API Key'
+regex = '''sk_live_[A-Za-z0-9]{24,}'''
+tags = ['key', 'stripe']
+
+[[rules]]
+id = 'deerflow-stripe-publishable-key'
+description = 'Stripe Publishable API Key'
+regex = '''pk_live_[A-Za-z0-9]{24,}'''
+tags = ['key', 'stripe']
+
+[[rules]]
+id = 'deerflow-stripe-restricted-key'
+description = 'Stripe Restricted API Key'
+regex = '''rk_live_[A-Za-z0-9]{24,}'''
+tags = ['key', 'stripe']
+
+[[rules]]
+id = 'deerflow-sendgrid-api-key'
+description = 'SendGrid API Key'
+regex = '''SG\.[A-Za-z0-9_\-]{22}\.[A-Za-z0-9_\-]{43}'''
+tags = ['key', 'sendgrid']
+
+[[rules]]
+id = 'deerflow-twilio-api-key'
+description = 'Twilio API Key SID'
+regex = '''SK[0-9a-fA-F]{32}'''
+tags = ['key', 'twilio']
+
+[[rules]]
+id = 'deerflow-slack-token'
+description = 'Slack Bot Token or User Token'
+regex = '''xox[baprs]-[0-9a-zA-Z]{10,}'''
+tags = ['key', 'slack']
+
+[[rules]]
+id = 'deerflow-slack-webhook'
+description = 'Slack Webhook URL'
+regex = '''https://hooks\.slack\.com/services/T[0-9A-Z]{8,}/B[0-9A-Z]{8,}/[A-Za-z0-9]{24,}'''
+tags = ['key', 'slack', 'webhook']
+
+[[rules]]
+id = 'deerflow-jwt-secret'
+description = 'JWT Signing Secret'
+regex = '''(?i)(?:jwt[_-]?secret|jwt[_-]?key|token[_-]?secret)[\s]*[=:]\s*['"]?[A-Za-z0-9_\-]{32,}['"]?'''
+tags = ['key', 'jwt']
+
+[[rules]]
+id = 'deerflow-private-key-rsa'
+description = 'RSA Private Key'
+regex = '''-----BEGIN RSA PRIVATE KEY-----'''
+tags = ['key', 'rsa']
+
+[[rules]]
+id = 'deerflow-private-key-ec'
+description = 'EC Private Key'
+regex = '''-----BEGIN EC PRIVATE KEY-----'''
+tags = ['key', 'ec']
+
+[[rules]]
+id = 'deerflow-private-key-generic'
+description = 'Generic Private Key (OPENSSH or PKCS8)'
+regex = '''-----BEGIN (?:OPENSSH |PKCS8 )?PRIVATE KEY-----'''
+tags = ['key', 'private']
+
+[[rules]]
+id = 'deerflow-postgres-connection-string'
+description = 'PostgreSQL Connection String with Password'
+regex = '''(?:postgres(?:ql)?|postgresql)://[^\s:]+:[^\s@]+@[^\s]+'''
+tags = ['connection', 'database', 'postgres']
+
+[[rules]]
+id = 'deerflow-mongodb-connection-string'
+description = 'MongoDB Connection String with Password'
+regex = '''mongodb(?:\+srv)?://[^\s:]+:[^\s@]+@[^\s]+'''
+tags = ['connection', 'database', 'mongodb']
+
+[[rules]]
+id = 'deerflow-mysql-connection-string'
+description = 'MySQL Connection String with Password'
+regex = '''mysql://[^\s:]+:[^\s@]+@[^\s]+'''
+tags = ['connection', 'database', 'mysql']
+
+[[rules]]
+id = 'deerflow-redis-connection-string'
+description = 'Redis Connection String with Password'
+regex = '''redis://:[^\s@]+@[^\s]+'''
+tags = ['connection', 'database', 'redis']
+
+[[rules]]
+id = 'deerflow-google-api-key'
+description = 'Google Cloud API Key'
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+tags = ['key', 'google']
+
+[[rules]]
+id = 'deerflow-google-oauth'
+description = 'Google OAuth Access Token'
+regex = '''ya29\.[0-9A-Za-z\-_]+'''
+tags = ['key', 'google', 'oauth']
+
+[[rules]]
+id = 'deerflow-google-service-account'
+description = 'Google Service Account Private Key (partial detection)'
+regex = '''"type":\s*"service_account"'''
+tags = ['key', 'google', 'service-account']
+
+[[rules]]
+id = 'deerflow-azure-storage-key'
+description = 'Azure Storage Account Key'
+regex = '''(?i)(?:azure[_-]?storage[_-]?key|storage[_-]?account[_-]?key)[\s]*[=:]\s*['"]?[A-Za-z0-9+/=]{88}['"]?'''
+tags = ['key', 'azure']
+
+[[rules]]
+id = 'deerflow-azure-ad-secret'
+description = 'Azure Active Directory Client Secret'
+regex = '''(?i)(?:azure[_-]?ad[_-]?secret|client[_-]?secret)[\s]*[=:]\s*['"]?[A-Za-z0-9_\-]{30,}['"]?'''
+tags = ['key', 'azure']
+
+[[rules]]
+id = 'deerflow-heroku-api-key'
+description = 'Heroku API Key'
+regex = '''[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'''
+tags = ['key', 'heroku']
+
+[[rules]]
+id = 'deerflow-npm-token'
+description = 'NPM Access Token'
+regex = '''npm_[A-Za-z0-9]{36}'''
+tags = ['key', 'npm']
+
+[[rules]]
+id = 'deerflow-docker-hub-token'
+description = 'Docker Hub Access Token'
+regex = '''dckr_pat_[A-Za-z0-9_-]{24,}'''
+tags = ['key', 'docker']
+
+[[rules]]
+id = 'deerflow-vault-token'
+description = 'HashiCorp Vault Token'
+regex = '''(?:hvs\.[A-Za-z0-9]{24,}|s\.[A-Za-z0-9]{24,})'''
+tags = ['key', 'vault']
+
+[[rules]]
+id = 'deerflow-hardcoded-password'
+description = 'Hardcoded Password in Code'
+regex = '''(?i)(?:password|passwd|pwd)[\s]*[=:]\s*['"][^'"]{6,}['"]'''
+tags = ['secret', 'password']
+
+[[rules]]
+id = 'deerflow-hardcoded-credential'
+description = 'Hardcoded Credential (username/password combo)'
+regex = '''(?i)(?:username|user)[\s]*[=:]\s*['"][^'"]+['"][\s,}]+(?:password|passwd|pwd)[\s]*[=:]\s*['"][^'"]+['"]'''
+tags = ['secret', 'credential']
+
+[[rules]]
+id = 'deerflow-sha1-hash'
+description = 'SHA-1 Hash (potentially weak password hash)'
+regex = '''(?<![A-Fa-f0-9])[A-Fa-f0-9]{40}(?![A-Fa-f0-9])'''
+tags = ['hash', 'sha1']
+
+[allowlist]
+description = 'Global allowlist for known false positives'
+paths = [
+    '''\.gitleaks\.toml''',
+    '''\.secrets\.baseline''',
+    '''security/dependency-check\.sh''',
+    '''package-lock\.json''',
+    '''\.git/''',
+    '''node_modules/''',
+    '''dist/''',
+    '''\.env\.example''',
+    '''\.env\.template''',
+]
+regexes = [
+    '''EXAMPLE''',
+    '''example''',
+    '''placeholder''',
+    '''PLACEHOLDER''',
+    '''your[_-]?api[_-]?key''',
+    '''your[_-]?token''',
+    '''your[_-]?secret''',
+    '''REPLACE_''',
+    '''<[^>]+>''',
+    '''\{\{[^}]+\}\}''',
+    '''__DEERFLOW_EXAMPLE__''',
+]

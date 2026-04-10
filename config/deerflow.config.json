@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "framework": "deerflow",
+  "strictMode": true,
+  "rules": {
+    "maxFileLines": 300,
+    "maxFunctionLines": 50,
+    "maxCyclomaticComplexity": 10,
+    "maxNestingDepth": 4,
+    "maxCoupling": 5,
+    "maxComponentLines": 200,
+    "forbidAnyType": true,
+    "forbidMockData": true,
+    "requireJSDoc": true,
+    "enforceSolid": true,
+    "enforceCleanArchitecture": true,
+    "minTestCoverage": 80,
+    "zeroLintWarnings": true
+  },
+  "security": {
+    "owaspCompliance": true,
+    "secretsDetection": true,
+    "dependencyAudit": true,
+    "licenseCompliance": true
+  },
+  "workflow": {
+    "mandatoryPhases": true,
+    "qualityGates": true,
+    "requireDocumentation": true,
+    "requireTesting": true
+  },
+  "ai": {
+    "enforceWorkflow": true,
+    "requireDeepAnalysis": true,
+    "verifyBeforeWrite": true,
+    "atomicChanges": true,
+    "maxBatchEdits": 5
+  }
+}

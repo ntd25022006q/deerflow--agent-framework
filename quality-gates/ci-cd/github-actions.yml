@@ -1,0 +1,703 @@
+# =============================================================================
+# DEERFLOW QUALITY GATE — CI/CD Pipeline
+# =============================================================================
+# Comprehensive quality gate pipeline for the Deerflow Agent Framework.
+# All jobs enforce strict quality thresholds — any failure blocks the merge.
+#
+# Badges available:
+#   ![](https://img.shields.io/github/actions/workflow/status/{owner}/{repo}/deerflow-quality-gate.yml?branch=main&label=Quality%20Gate)
+#   ![](https://img.shields.io/codecov/c/github/{owner}/{repo}?label=Coverage)
+#   ![](https://img.shields.io/badge/Bundle%20Size-<500KB-brightgreen)
+#   ![](https://img.shields.io/badge/Security-No%20Vulnerabilities-success)
+# =============================================================================
+
+name: DEERFLOW QUALITY GATE
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: deerflow-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+jobs:
+  # =========================================================================
+  # Job 1: Code Quality — ESLint, Prettier, TypeScript compilation
+  # =========================================================================
+  code-quality:
+    name: 🔍 Code Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # --- TypeScript strict compilation check ---
+      - name: TypeScript Compilation Check
+        run: npx tsc --noEmit -p quality-gates/linters/tsconfig-strict.json
+        continue-on-error: false
+
+      # --- ESLint — zero warnings, zero errors ---
+      - name: ESLint
+        run: npx eslint . --config quality-gates/linters/eslint-rules.js --ext .ts,.tsx --max-warnings 0 --format json --output-file eslint-report.json
+        continue-on-error: false
+
+      # --- ESLint human-readable report ---
+      - name: ESLint Report (readable)
+        run: npx eslint . --config quality-gates/linters/eslint-rules.js --ext .ts,.tsx --max-warnings 0
+        continue-on-error: false
+
+      # --- Prettier formatting check ---
+      - name: Prettier Check
+        run: npx prettier --check "**/*.{ts,tsx,js,jsx,json,md,yml,yaml,css,scss}" --no-error-on-unmatched-pattern
+
+      - name: Upload ESLint report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eslint-report
+          path: eslint-report.json
+          retention-days: 14
+
+  # =========================================================================
+  # Job 2: Security Audit — npm audit, gitleaks, dependency review
+  # =========================================================================
+  security-audit:
+    name: 🔒 Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # --- npm audit: fail on critical or high vulnerabilities ---
+      - name: npm audit (critical + high)
+        run: npm audit --audit-level=high --omit=dev
+        continue-on-error: false
+
+      # --- Full npm audit report ---
+      - name: npm audit (full report)
+        run: npm audit --json > audit-report.json || true
+
+      # --- Gitleaks — detect committed secrets ---
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: false
+
+      # --- Dependency review (GitHub native) ---
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          deny-licenses: GPL-3.0, AGPL-3.0
+          vulnerability-check: true
+          license-check: true
+
+      # --- npm out-of-date check ---
+      - name: Check for outdated dependencies
+        run: npx npm-check-updates --json > outdated-report.json || true
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: |
+            audit-report.json
+            outdated-report.json
+          retention-days: 30
+
+  # =========================================================================
+  # Job 3: Test Suite — Unit, Integration, E2E with coverage thresholds
+  # =========================================================================
+  test-suite:
+    name: 🧪 Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [code-quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # --- Unit Tests ---
+      - name: Unit Tests
+        run: npx vitest run --config quality-gates/testers/vitest.config.ts --coverage --reporter=verbose
+        env:
+          NODE_ENV: test
+
+      # --- Integration Tests ---
+      - name: Integration Tests
+        run: npx vitest run --config quality-gates/testers/vitest.config.ts --reporter=verbose --dir tests/integration
+        env:
+          NODE_ENV: test
+          INTEGRATION_TEST: 'true'
+
+      # --- E2E Tests ---
+      - name: E2E Tests
+        run: npx vitest run --config quality-gates/testers/vitest.config.ts --reporter=verbose --dir tests/e2e
+        env:
+          NODE_ENV: test
+          E2E_TEST: 'true'
+        continue-on-error: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
+
+      # --- Coverage thresholds enforcement ---
+      - name: Verify Coverage Thresholds
+        run: |
+          COVERAGE_JSON=$(cat coverage/coverage-summary.json)
+          LINES=$(echo "$COVERAGE_JSON" | jq '.total.lines.pct')
+          FUNCTIONS=$(echo "$COVERAGE_JSON" | jq '.total.functions.pct')
+          BRANCHES=$(echo "$COVERAGE_JSON" | jq '.total.branches.pct')
+          STATEMENTS=$(echo "$COVERAGE_JSON" | jq '.total.statements.pct')
+
+          MINIMUM=80
+
+          echo "=== Coverage Report ==="
+          echo "Lines:       ${LINES}% (min: ${MINIMUM}%)"
+          echo "Functions:   ${FUNCTIONS}% (min: ${MINIMUM}%)"
+          echo "Branches:    ${BRANCHES}% (min: ${MINIMUM}%)"
+          echo "Statements:  ${STATEMENTS}% (min: ${MINIMUM}%)"
+
+          PASS=true
+          for metric in LINES FUNCTIONS BRANCHES STATEMENTS; do
+            VAL=$(echo "$COVERAGE_JSON" | jq ".total.$( echo $metric | tr '[:upper:]' '[:lower:]' ).pct")
+            if (( $(echo "$VAL < $MINIMUM" | bc -l) )); then
+              echo "::error::$metric coverage ${VAL}% is below minimum ${MINIMUM}%"
+              PASS=false
+            fi
+          done
+
+          if [ "$PASS" = false ]; then
+            exit 1
+          fi
+
+      - name: Upload coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
+          flags: unittests
+          verbose: true
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+  # =========================================================================
+  # Job 4: Build Verification — Build check, bundle size analysis
+  # =========================================================================
+  build-verification:
+    name: 📦 Build Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [code-quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # --- Production build ---
+      - name: Production Build
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      # --- Bundle size analysis ---
+      - name: Bundle Size Check
+        run: |
+          echo "=== Bundle Size Analysis ==="
+          if [ -d "dist" ]; then
+            TOTAL_SIZE=$(du -sb dist/ | cut -f1)
+            TOTAL_KB=$((TOTAL_SIZE / 1024))
+            MAX_KB=512000  # 500MB absolute max for all assets
+            echo "Total dist size: ${TOTAL_KB}KB"
+
+            # Check individual JS bundles
+            echo ""
+            echo "=== JavaScript Bundle Sizes ==="
+            find dist/ -name "*.js" -exec du -h {} \; | sort -rh | head -20
+
+            # Fail if any single JS file exceeds 500KB
+            LARGE_FILES=$(find dist/ -name "*.js" -size +500k)
+            if [ -n "$LARGE_FILES" ]; then
+              echo "::error::The following JS files exceed 500KB:"
+              echo "$LARGE_FILES"
+              exit 1
+            fi
+          fi
+          echo "Bundle size check passed."
+
+      # --- Tree-shaking verification ---
+      - name: Tree-Shaking Verification
+        run: |
+          echo "=== Verifying tree-shaking ==="
+          if [ -d "dist" ]; then
+            # Check that unused exports are not included
+            UNUSED=$(rg "UNUSED_EXPORT" dist/ --count || true)
+            if [ -n "$UNUSED" ]; then
+              echo "::warning::Potential dead code detected in bundle"
+            fi
+          fi
+          echo "Tree-shaking check completed."
+
+      # --- Source map check (dev only) ---
+      - name: Source Map Verification (Development)
+        if: github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/')
+        run: |
+          echo "=== Source Map Check (Development Build) ==="
+          npm run build
+          MAP_COUNT=$(find dist/ -name "*.map" | wc -l)
+          JS_COUNT=$(find dist/ -name "*.js" | wc -l)
+          echo "JS files: ${JS_COUNT}, Source maps: ${MAP_COUNT}"
+          if [ "$MAP_COUNT" -lt "$JS_COUNT" ]; then
+            echo "::warning::Some JS files are missing source maps"
+          fi
+        env:
+          NODE_ENV: development
+
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist/
+          retention-days: 7
+
+  # =========================================================================
+  # Job 5: Architecture Check — Circular deps, layer violations, coupling
+  # =========================================================================
+  architecture-check:
+    name: 🏗️ Architecture Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [code-quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # --- Circular dependency check ---
+      - name: Detect Circular Dependencies
+        run: |
+          echo "=== Circular Dependency Check ==="
+          npx madge --circular --extensions ts,tsx src/ 2>&1 | tee circular-deps.txt
+          if grep -q "Circular" circular-deps.txt; then
+            echo "::error::Circular dependencies detected! Run 'npx madge --circular src/' to identify."
+            exit 1
+          fi
+          echo "No circular dependencies found."
+
+      # --- Layer violation check ---
+      - name: Layer Violation Check
+        run: |
+          echo "=== Layer Violation Check ==="
+          ERRORS=0
+
+          # Domain layer must not import from infrastructure or application
+          if rg --files-with-matches "from ['\"](\.\.\/)*infrastructure" src/domain/ --type ts 2>/dev/null; then
+            echo "::error::Domain layer imports from Infrastructure layer — VIOLATION"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if rg --files-with-matches "from ['\"](\.\.\/)*application" src/domain/ --type ts 2>/dev/null; then
+            echo "::error::Domain layer imports from Application layer — VIOLATION"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          # Infrastructure must not import from presentation/UI
+          if rg --files-with-matches "from ['\"](\.\.\/)*(components|pages|views)" src/infrastructure/ --type ts 2>/dev/null; then
+            echo "::error::Infrastructure layer imports from Presentation layer — VIOLATION"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::$ERRORS layer violation(s) found"
+            exit 1
+          fi
+          echo "No layer violations found."
+
+      # --- File complexity metrics ---
+      - name: File Complexity Check
+        run: |
+          echo "=== File Complexity Check ==="
+          ERRORS=0
+
+          # Check for files exceeding 300 lines
+          while IFS= read -r file; do
+            LINES=$(wc -l < "$file")
+            if [ "$LINES" -gt 300 ]; then
+              echo "::warning::$file has $LINES lines (max: 300)"
+              ERRORS=$((ERRORS + 1))
+            fi
+          done < <(find src/ -name "*.ts" -o -name "*.tsx" 2>/dev/null)
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::error::$ERRORS file(s) exceed maximum line count"
+            exit 1
+          fi
+          echo "All files within line limits."
+
+      - name: Upload architecture report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-report
+          path: circular-deps.txt
+          retention-days: 14
+
+  # =========================================================================
+  # Job 6: Accessibility Check — WCAG 2.1 AA compliance (UI projects)
+  # =========================================================================
+  accessibility-check:
+    name: ♿ Accessibility Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-verification]
+    if: hashFiles('src/**/*.tsx') != ''
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      # --- Static accessibility analysis ---
+      - name: Run axe-core analysis
+        run: |
+          echo "=== WCAG 2.1 AA Accessibility Check ==="
+          # Check JSX/TSX files for common a11y issues
+          npx eslint . --config quality-gates/linters/eslint-rules.js --ext .tsx --rule '{"jsx-a11y/*": "error"}' --max-warnings 0
+          echo "Static accessibility analysis passed."
+
+      # --- Check for missing alt attributes ---
+      - name: Check Image Alt Attributes
+        run: |
+          echo "=== Image Alt Attribute Check ==="
+          MISSING_ALT=$(rg '<img(?![^>]*\balt=)' src/ --type tsx -l || true)
+          if [ -n "$MISSING_ALT" ]; then
+            echo "::error::Images missing alt attributes in: $MISSING_ALT"
+            exit 1
+          fi
+          echo "All images have alt attributes."
+
+      # --- Check for missing form labels ---
+      - name: Check Form Labels
+        run: |
+          echo "=== Form Label Check ==="
+          # Check for input elements without associated labels
+          UNLABELED=$(rg '<input(?![^>]*\bid=)' src/ --type tsx -l || true)
+          if [ -n "$UNLABELED" ]; then
+            echo "::warning::Potential unlabeled form inputs in: $UNLABELED"
+          fi
+          echo "Form label check completed."
+
+      - name: Upload a11y report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accessibility-report
+          path: a11y-report.json
+          retention-days: 14
+
+  # =========================================================================
+  # Job 7: Performance Check — Lighthouse CI (UI projects)
+  # =========================================================================
+  performance-check:
+    name: ⚡ Performance Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-verification]
+    if: hashFiles('src/**/*.tsx') != '' && github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_ENV: production
+
+      # --- Lighthouse CI ---
+      - name: Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          configPath: .lighthouserc.json
+          uploadArtifacts: true
+          budgetPath: ./budget.json || true
+
+      # --- Bundle size limits ---
+      - name: Performance Budget Check
+        run: |
+          echo "=== Performance Budget ==="
+          if [ -f "dist" ]; then
+            JS_TOTAL=$(find dist/ -name "*.js" -exec cat {} + | wc -c)
+            CSS_TOTAL=$(find dist/ -name "*.css" -exec cat {} + | wc -c)
+            JS_KB=$((JS_TOTAL / 1024))
+            CSS_KB=$((CSS_TOTAL / 1024))
+
+            echo "JS total: ${JS_KB}KB"
+            echo "CSS total: ${CSS_KB}KB"
+
+            if [ "$JS_KB" -gt 200 ]; then
+              echo "::warning::Initial JS load ${JS_KB}KB exceeds 200KB guideline"
+            fi
+          fi
+
+  # =========================================================================
+  # Job 8: Documentation Check — API docs, README consistency
+  # =========================================================================
+  documentation-check:
+    name: 📖 Documentation Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [code-quality]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --frozen-lockfile
+
+      # --- API documentation generation check ---
+      - name: Generate API Documentation
+        run: |
+          echo "=== API Documentation Check ==="
+          npx typedoc --entryPointStrategy expand src/ --json api-docs.json 2>&1 || {
+            echo "::warning::TypeDoc generation had warnings"
+          }
+          if [ -f "api-docs.json" ]; then
+            DOC_COUNT=$(jq '.children | length' api-docs.json 2>/dev/null || echo "0")
+            echo "API documentation generated: ${DOC_COUNT} modules documented"
+          fi
+
+      # --- README consistency checks ---
+      - name: README Consistency Check
+        run: |
+          echo "=== README Consistency Check ==="
+          ERRORS=0
+
+          # Check that README mentions key sections
+          if ! rg -q "## Installation" README.md 2>/dev/null; then
+            echo "::warning::README missing 'Installation' section"
+            ERRORS=$((ERRORS + 1))
+          fi
+          if ! rg -q "## Usage" README.md 2>/dev/null; then
+            echo "::warning::README missing 'Usage' section"
+            ERRORS=$((ERRORS + 1))
+          fi
+          if ! rg -q "## Contributing" README.md 2>/dev/null; then
+            echo "::warning::README missing 'Contributing' section"
+            ERRORS=$((ERRORS + 1))
+          fi
+          if ! rg -q "## License" README.md 2>/dev/null; then
+            echo "::warning::README missing 'License' section"
+            ERRORS=$((ERRORS + 1))
+          fi
+
+          # Check all broken links in README
+          if rg -o 'https?://[^\s)\]]+' README.md > readme-links.txt 2>/dev/null; then
+            echo "Found $(wc -l < readme-links.txt) links in README"
+          fi
+
+          if [ $ERRORS -gt 0 ]; then
+            echo "::warning::$ERRORS documentation consistency issue(s)"
+          fi
+          echo "Documentation check completed."
+
+      # --- Check that all exported functions have JSDoc ---
+      - name: Export Documentation Check
+        run: |
+          echo "=== Export Documentation Check ==="
+          UNDOCUMENTED=0
+          while IFS= read -r file; do
+            MISSING=$(rg "export (function|class|const|interface|type|enum)" "$file" -n | while read -r match; do
+              LINE_NUM=$(echo "$match" | cut -d: -f1)
+              PRECEDING=$(head -n "$LINE_NUM" "$file" | rg -c '/\*\*' || true)
+              if [ "$PRECEDING" -eq 0 ]; then
+                echo "$file:$LINE_NUM"
+              fi
+            done)
+            if [ -n "$MISSING" ]; then
+              echo "$MISSING"
+              UNDOCUMENTED=$((UNDOCUMENTED + 1))
+            fi
+          done < <(find src/ -name "*.ts" -o -name "*.tsx" 2>/dev/null | head -50)
+
+          if [ "$UNDOCUMENTED" -gt 0 ]; then
+            echo "::warning::$UNDOCUMENTED export(s) may be missing JSDoc documentation"
+          fi
+          echo "Export documentation check completed."
+
+      - name: Upload documentation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation-report
+          path: api-docs.json
+          retention-days: 14
+
+  # =========================================================================
+  # Job 9: Quality Gate Summary — Final gate that depends on all checks
+  # =========================================================================
+  quality-gate-summary:
+    name: ✅ Quality Gate Summary
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs:
+      - code-quality
+      - security-audit
+      - test-suite
+      - build-verification
+      - architecture-check
+      - documentation-check
+    if: always()
+    steps:
+      - name: Evaluate Quality Gate Results
+        run: |
+          echo "╔══════════════════════════════════════════════════════════╗"
+          echo "║          DEERFLOW QUALITY GATE — SUMMARY               ║"
+          echo "╠══════════════════════════════════════════════════════════╣"
+
+          CHECKS=("code-quality" "security-audit" "test-suite" "build-verification" "architecture-check" "documentation-check")
+          LABELS=("Code Quality" "Security Audit" "Test Suite" "Build Verification" "Architecture" "Documentation")
+
+          ALL_PASSED=true
+          for i in "${!CHECKS[@]}"; do
+            CHECK="${CHECKS[$i]}"
+            LABEL="${LABELS[$i]}"
+            RESULT="${{ needs.${CHECK}.result }}"
+
+            if [ "$RESULT" = "success" ]; then
+              echo "║  ✅ $LABEL: PASSED                                ║"
+            elif [ "$RESULT" = "skipped" ]; then
+              echo "║  ⏭️  $LABEL: SKIPPED                               ║"
+            else
+              echo "║  ❌ $LABEL: FAILED                                ║"
+              ALL_PASSED=false
+            fi
+          done
+
+          echo "╠══════════════════════════════════════════════════════════╣"
+
+          if [ "$ALL_PASSED" = true ]; then
+            echo "║  🎉 ALL QUALITY GATES PASSED — SAFE TO MERGE         ║"
+            echo "╚══════════════════════════════════════════════════════════╝"
+          else
+            echo "║  🚫 QUALITY GATES FAILED — DO NOT MERGE              ║"
+            echo "╚══════════════════════════════════════════════════════════╝"
+            exit 1
+          fi
+
+      - name: Create Quality Gate Badge
+        if: always()
+        run: |
+          if [ "${{ needs.code-quality.result }}" = "success" ] && \
+             [ "${{ needs.security-audit.result }}" = "success" ] && \
+             [ "${{ needs.test-suite.result }}" = "success" ] && \
+             [ "${{ needs.build-verification.result }}" = "success" ] && \
+             [ "${{ needs.architecture-check.result }}" = "success" ]; then
+            echo "pass" > quality-gate-status.txt
+          else
+            echo "fail" > quality-gate-status.txt
+          fi
+
+      - name: Upload quality gate status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-gate-status
+          path: quality-gate-status.txt
+          retention-days: 30

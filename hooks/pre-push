@@ -1,0 +1,221 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════
+# DEERFLOW PRE-PUSH HOOK
+# Full quality gate before pushing to remote.
+# Checks: lint, type-check, tests, build, bundle size, architecture
+# ═══════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+# ─── Colors ───────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+NC='\033[0m'
+
+log_pass() { echo -e "${GREEN}[PASS]${NC} $1"; }
+log_fail() { echo -e "${RED}[FAIL]${NC} $1"; }
+log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_info() { echo -e "${BLUE}[PUSH]${NC} $1"; }
+log_section() { echo -e "\n${MAGENTA}━━━ $1 ━━━${NC}\n"; }
+
+ERRORS=0
+WARNINGS=0
+START_TIME=$(date +%s)
+
+# ─── Determine changed files ─────────────────────────────────
+REMOTE_BRANCH="${1:-origin/main}"
+CHANGED_FILES=$(git diff --name-only "$REMOTE_BRANCH"...HEAD 2>/dev/null || git diff --name-only HEAD~10..HEAD 2>/dev/null || echo "")
+HAS_CHANGES=false
+[[ -n "$CHANGED_FILES" ]] && HAS_CHANGES=true
+
+log_info "Pre-push quality gate starting..."
+[[ "$HAS_CHANGES" == "true" ]] && log_info "Checking ${#CHANGED_FILES[@]} changed file(s)"
+
+# ═══════════════════════════════════════════════════════════════
+# 1. LINTING
+# ═══════════════════════════════════════════════════════════════
+log_section "LINTING"
+
+if command -v npx >/dev/null 2>&1 && [[ -f "package.json" ]]; then
+  log_info "Running full ESLint check..."
+  if npx eslint . --ext .ts,.tsx,.js,.jsx --max-warnings=0 --quiet 2>&1; then
+    log_pass "ESLint: zero errors, zero warnings"
+  else
+    log_fail "ESLint: issues found — fix before pushing"
+    ERRORS=$((ERRORS + 1))
+  fi
+else
+  log_warn "ESLint not configured — skipping"
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 2. TYPE CHECK
+# ═══════════════════════════════════════════════════════════════
+log_section "TYPE SAFETY"
+
+if command -v npx >/dev/null 2>&1 && [[ -f "tsconfig.json" ]]; then
+  log_info "Running TypeScript type check..."
+  if npx tsc --noEmit 2>&1; then
+    log_pass "TypeScript: no type errors"
+  else
+    log_fail "TypeScript: type errors found — fix before pushing"
+    ERRORS=$((ERRORS + 1))
+  fi
+else
+  log_warn "TypeScript not configured — skipping"
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 3. TESTS
+# ═══════════════════════════════════════════════════════════════
+log_section "TESTS"
+
+if command -v npx >/dev/null 2>&1; then
+  log_info "Running test suite..."
+  if npx vitest run 2>&1; then
+    log_pass "All tests passed"
+  else
+    log_fail "Tests failed — fix before pushing"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # Coverage check
+  log_info "Checking coverage threshold..."
+  COVERAGE_OUTPUT=$(npx vitest run --coverage 2>&1 || true)
+  if echo "$COVERAGE_OUTPUT" | rg -q "All files"; then
+    COV=$(echo "$COVERAGE_OUTPUT" | rg "All files" | awk '{print $NF}' | tr -d '%')
+    if [[ -n "$COV" ]] && (( $(echo "$COV >= 80" | bc -l 2>/dev/null || echo 1) )); then
+      log_pass "Coverage: ${COV}% (>= 80%)"
+    else
+      log_fail "Coverage: ${COV:-unknown}% — below 80% threshold"
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
+else
+  log_warn "Test runner not available — skipping"
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 4. BUILD
+# ═══════════════════════════════════════════════════════════════
+log_section "BUILD"
+
+if [[ -f "package.json" ]] && command -v npm >/dev/null 2>&1; then
+  # Check if build script exists
+  if jq -e '.scripts.build' package.json >/dev/null 2>&1; then
+    log_info "Running build..."
+    if npm run build 2>&1; then
+      log_pass "Build successful"
+    else
+      log_fail "Build failed — fix before pushing"
+      ERRORS=$((ERRORS + 1))
+    fi
+  else
+    log_warn "No build script — skipping"
+  fi
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 5. SECURITY
+# ═══════════════════════════════════════════════════════════════
+log_section "SECURITY"
+
+# npm audit
+if [[ -f "package.json" ]] && command -v npm >/dev/null 2>&1; then
+  log_info "Running npm audit..."
+  if npm audit --audit-level=moderate 2>&1; then
+    log_pass "No moderate+ vulnerabilities"
+  else
+    log_fail "Vulnerabilities found — fix before pushing"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# gitleaks
+if command -v gitleaks >/dev/null 2>&1; then
+  log_info "Running gitleaks..."
+  if gitleaks detect --source . --no-banner 2>&1; then
+    log_pass "No secrets detected"
+  else
+    log_fail "Secrets detected — remove before pushing"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 6. ARCHITECTURE
+# ═══════════════════════════════════════════════════════════════
+log_section "ARCHITECTURE"
+
+if command -v npx >/dev/null 2>&1 && [[ -d "src" ]]; then
+  # Circular dependencies
+  if npx madge --circular --extensions ts,tsx src/ 2>/dev/null; then
+    log_pass "No circular dependencies"
+  else
+    log_fail "Circular dependencies detected"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # File size
+  log_info "Checking file sizes..."
+  OVERSIZED=$(find src/ -name '*.ts' -o -name '*.tsx' | while read -r f; do
+    LINES=$(wc -l < "$f")
+    [[ "$LINES" -gt 300 ]] && echo "$f ($LINES lines)"
+  done)
+  if [[ -z "$OVERSIZED" ]]; then
+    log_pass "All source files under 300 lines"
+  else
+    log_fail "Files exceeding 300 lines:"
+    echo "$OVERSIZED" | head -10 | while read -r f; do log_fail "  — $f"; done
+    WARNINGS=$((WARNINGS + 1))
+  fi
+fi
+
+# ═══════════════════════════════════════════════════════════════
+# 7. BUNDLE SIZE
+# ═══════════════════════════════════════════════════════════════
+log_section "BUNDLE SIZE"
+
+for dir in .next dist build out; do
+  if [[ -d "$dir" ]]; then
+    SIZE_KB=$(du -sk "$dir" 2>/dev/null | awk '{print $1}')
+    SIZE_MB=$(echo "scale=2; $SIZE_KB / 1024" | bc 2>/dev/null || echo "?")
+    log_info "$dir/ bundle size: ${SIZE_MB} MB"
+    if [[ "$SIZE_KB" -gt 524288 ]]; then
+      log_warn "Bundle exceeds 500 MB — consider code splitting"
+      WARNINGS=$((WARNINGS + 1))
+    else
+      log_pass "Bundle size within limits"
+    fi
+    break
+  done
+done
+
+# ═══════════════════════════════════════════════════════════════
+# SUMMARY
+# ═══════════════════════════════════════════════════════════════
+END_TIME=$(date +%s)
+DURATION=$((END_TIME - START_TIME))
+
+echo ""
+echo -e "══════════════════════════════════════════════════════"
+echo -e "  🦌 DEERFLOW PRE-PUSH QUALITY GATE"
+echo -e "  Duration: ${DURATION}s"
+echo -e "══════════════════════════════════════════════════════"
+
+if [[ "$ERRORS" -gt 0 ]]; then
+  echo -e "${RED}  ✗ ${ERRORS} error(s) — PUSH BLOCKED${NC}"
+  echo -e "${YELLOW}  ⚠ ${WARNINGS} warning(s)${NC}"
+  echo -e "${RED}  Fix all errors, then try again.${NC}"
+  echo -e "${RED}  To force: git push --no-verify (NOT recommended)${NC}"
+  echo -e "══════════════════════════════════════════════════════"
+  exit 1
+else
+  echo -e "${GREEN}  ✓ ALL CHECKS PASSED — safe to push${NC}"
+  [[ "$WARNINGS" -gt 0 ]] && echo -e "${YELLOW}  ⚠ ${WARNINGS} warning(s) — consider addressing${NC}"
+  echo -e "══════════════════════════════════════════════════════"
+  exit 0
+fi

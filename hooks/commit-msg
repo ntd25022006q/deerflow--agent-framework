@@ -1,0 +1,120 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════════
+# DEERFLOW COMMIT-MSG HOOK
+# Enforces Conventional Commits format.
+# Specification: https://www.conventionalcommits.org/en/v1.0.0/
+#
+# Format: <type>(<scope>): <description>
+#
+# Types: feat, fix, docs, style, refactor, perf, test, build,
+#        ci, chore, revert
+#
+# Examples:
+#   feat(auth): add OAuth2 login flow
+#   fix(api): resolve null pointer in user lookup
+#   refactor(core): extract validation into shared module
+# ═══════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+# ─── Colors ───────────────────────────────────────────────────
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+# ─── Read commit message ─────────────────────────────────────
+COMMIT_MSG_FILE="$1"
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# ─── Valid commit types ──────────────────────────────────────
+VALID_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+
+# ─── Regex pattern ───────────────────────────────────────────
+# Matches:
+#   type(scope): description
+#   type: description
+#   type!: breaking change (no scope)
+#   type(scope)!: breaking change
+#
+# Description rules:
+#   - Starts with lowercase letter
+#   - No trailing period
+#   - Min 10 characters
+#   - Max 100 characters for first line
+PATTERN="^(${VALID_TYPES})(\(.+\))?!?: .{10,}$"
+
+# ─── Skip for merge commits and revert commits ───────────────
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -1)
+
+if [[ "$FIRST_LINE" =~ ^Merge ]]; then
+  exit 0
+fi
+
+# Skip if this is a fixup or squash commit
+if [[ "$FIRST_LINE" =~ ^fixup! ]] || [[ "$FIRST_LINE" =~ ^squash! ]]; then
+  exit 0
+fi
+
+# ─── Validate format ─────────────────────────────────────────
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+  cat >&2 << 'MSG'
+╔══════════════════════════════════════════════════════════════╗
+║  🦌 DEERFLOW: Invalid commit message format                   ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  Expected format:                                             ║
+║                                                              ║
+║    <type>(<scope>): <description>                            ║
+║                                                              ║
+║  Where:                                                       ║
+║    type = feat | fix | docs | style | refactor | perf |      ║
+║           test | build | ci | chore | revert                  ║
+║    scope = optional component/module name                     ║
+║    description = lowercase, imperative mood, no period,      ║
+║                  min 10 chars, max 100 chars                  ║
+║                                                              ║
+║  Examples:                                                    ║
+║    feat(auth): add OAuth2 login flow                          ║
+║    fix(api): resolve null pointer in user lookup              ║
+║    refactor(core): extract validation module                   ║
+║    test(utils): add unit tests for date formatter             ║
+║    docs: update README installation instructions              ║
+║                                                              ║
+║  Breaking changes:                                            ║
+║    feat(api)!: change response format to v2                   ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+MSG
+  exit 1
+fi
+
+# ─── Additional checks ───────────────────────────────────────
+
+# Check first line length (max 100 chars for Conventional Commits)
+FIRST_LINE_LEN=${#FIRST_LINE}
+if [[ "$FIRST_LINE_LEN" -gt 100 ]]; then
+  echo -e "${RED}[DEERFLOW] Commit message first line too long: ${FIRST_LINE_LEN} chars (max 100)${NC}" >&2
+  exit 1
+fi
+
+# Check that description starts with lowercase
+DESCRIPTION=$(echo "$FIRST_LINE" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: //' )
+if [[ "$DESCRIPTION" =~ ^[A-Z] ]]; then
+  echo -e "${YELLOW}[DEERFLOW] Warning: commit description should start with lowercase${NC}" >&2
+  # Warning only, not blocking
+fi
+
+# Check for trailing period
+if [[ "$DESCRIPTION" =~ \.$ ]]; then
+  echo -e "${YELLOW}[DEERFLOW] Warning: commit description should not end with a period${NC}" >&2
+  # Warning only, not blocking
+fi
+
+# Check for issue reference (encouraged but not required)
+if ! echo "$COMMIT_MSG" | grep -qE "(refs|fixes|closes|resolves) #[0-9]+"; then
+  echo -e "${YELLOW}[DEERFLOW] Tip: consider adding an issue reference (e.g., refs #123)${NC}" >&2
+fi
+
+# ─── Success ─────────────────────────────────────────────────
+exit 0

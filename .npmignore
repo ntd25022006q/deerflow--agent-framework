@@ -1,0 +1,56 @@
+# Source files
+src/
+core/
+scripts/
+hooks/
+templates/
+config/
+docs/
+examples/
+
+# Configuration
+.cursorrules
+.windsurfrules
+.clinerules
+.editorconfig
+.prettierrc
+.prettierignore
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# CI/CD
+.github/
+.codex/
+
+# Security
+security/
+
+# Quality gates
+quality-gates/
+
+# MCP
+mcp-tools/
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+*.test.js
+*.spec.js
+vitest.config.ts
+jest.config.ts
+jest.config.js
+
+# Build
+tsconfig.json
+tsconfig.*.json
+
+# Deerflow state
+.deerflow/
+
+# Root config
+package.json
+package-lock.json

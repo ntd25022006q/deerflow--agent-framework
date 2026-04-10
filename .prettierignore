@@ -1,0 +1,15 @@
+node_modules
+dist
+build
+coverage
+.next
+.turbo
+*.min.js
+*.min.css
+CHANGELOG.md
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+bun.lockb
+.deerflow/reports
+.deerflow/metrics

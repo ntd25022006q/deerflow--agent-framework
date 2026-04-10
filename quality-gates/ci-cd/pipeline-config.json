@@ -1,0 +1,233 @@
+{
+  "version": "1.0",
+  "name": "Deerflow Agent Framework — Pipeline Configuration",
+  "description": "Central configuration for all quality gates, thresholds, and enforcement policies",
+  "qualityGates": {
+    "codeQuality": {
+      "eslint": {
+        "maxWarnings": 0,
+        "maxErrors": 0,
+        "configPath": "quality-gates/linters/eslint-rules.js",
+        "extensions": [".ts", ".tsx"]
+      },
+      "typescript": {
+        "strict": true,
+        "noImplicitAny": true,
+        "strictNullChecks": true,
+        "configPath": "quality-gates/linters/tsconfig-strict.json"
+      },
+      "prettier": {
+        "check": true,
+        "write": false,
+        "extensions": [".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".yml", ".yaml", ".css", ".scss"]
+      },
+      "circularDeps": {
+        "allowed": 0,
+        "tool": "madge",
+        "extensions": ["ts", "tsx"]
+      }
+    },
+    "testing": {
+      "unitTestCoverage": {
+        "minimum": 80,
+        "metrics": {
+          "lines": 80,
+          "functions": 80,
+          "branches": 80,
+          "statements": 80
+        }
+      },
+      "integrationTestCoverage": {
+        "minimum": 60,
+        "metrics": {
+          "lines": 60,
+          "functions": 60,
+          "branches": 60,
+          "statements": 60
+        }
+      },
+      "e2eTests": {
+        "required": true,
+        "failOnMissing": true,
+        "timeout": 60000
+      },
+      "mutationTesting": {
+        "minimum": 70,
+        "tool": "stryker",
+        "thresholds": {
+          "high": 80,
+          "low": 70
+        }
+      },
+      "framework": "vitest",
+      "configPath": "quality-gates/testers/vitest.config.ts",
+      "environment": "jsdom",
+      "globals": true
+    },
+    "security": {
+      "vulnerabilities": {
+        "critical": 0,
+        "high": 0,
+        "medium": 5,
+        "low": 10
+      },
+      "secrets": {
+        "allowed": 0,
+        "tool": "gitleaks",
+        "scanEntireHistory": false
+      },
+      "dependencyAudit": {
+        "failOnVulnerability": true,
+        "auditLevel": "high",
+        "denyLicenses": ["GPL-3.0", "AGPL-3.0"]
+      },
+      "sast": {
+        "enabled": true,
+        "rules": ["security/recommended", "jsx-a11y/recommended"]
+      },
+      "containerScan": {
+        "enabled": false,
+        "tool": "trivy"
+      }
+    },
+    "build": {
+      "maxBundleSize": "500KB",
+      "maxInitialLoad": "200KB",
+      "maxSingleFile": "500KB",
+      "treeShaking": {
+        "required": true,
+        "verifyDeadCode": true
+      },
+      "sourceMaps": {
+        "production": false,
+        "development": true,
+        "required": true
+      },
+      "minification": {
+        "production": true,
+        "mangleNames": true
+      },
+      "outputFormats": ["esm", "cjs"]
+    },
+    "architecture": {
+      "maxFileLines": 300,
+      "maxFunctionLines": 50,
+      "maxCyclomaticComplexity": 10,
+      "maxCoupling": 5,
+      "maxNestingDepth": 4,
+      "maxComponentLines": 200,
+      "maxParams": 5,
+      "maxClassesPerFile": 1,
+      "layers": {
+        "domain": {
+          "mayImportFrom": ["domain"],
+          "mustNotImportFrom": ["application", "infrastructure", "presentation"]
+        },
+        "application": {
+          "mayImportFrom": ["domain", "application"],
+          "mustNotImportFrom": ["infrastructure", "presentation"]
+        },
+        "infrastructure": {
+          "mayImportFrom": ["domain", "application", "infrastructure"],
+          "mustNotImportFrom": ["presentation"]
+        },
+        "presentation": {
+          "mayImportFrom": ["domain", "application", "infrastructure", "presentation"],
+          "mustNotImportFrom": []
+        }
+      }
+    },
+    "accessibility": {
+      "enabled": true,
+      "standard": "WCAG-2.1-AA",
+      "checkAltAttributes": true,
+      "checkFormLabels": true,
+      "checkColorContrast": true,
+      "checkKeyboardNavigation": true,
+      "checkAriaAttributes": true,
+      "lighthouseA11yScore": 90
+    },
+    "performance": {
+      "lighthouseScore": {
+        "performance": 90,
+        "accessibility": 90,
+        "bestPractices": 90,
+        "seo": 80
+      },
+      "maxLcp": 2500,
+      "maxFid": 100,
+      "maxCls": 0.1,
+      "maxTtfb": 800
+    },
+    "documentation": {
+      "readmeRequired": true,
+      "readmeSections": [
+        "Installation",
+        "Usage",
+        "Contributing",
+        "License"
+      ],
+      "apiDocsRequired": true,
+      "jsdocForExports": true,
+      "changelogRequired": true
+    }
+  },
+  "enforcement": {
+    "preCommit": {
+      "enabled": true,
+      "hooks": ["lint-staged", "prettier", "type-check"],
+      "stagedFilePatterns": ["*.ts", "*.tsx", "*.js", "*.jsx"]
+    },
+    "pullRequest": {
+      "requiredChecks": [
+        "code-quality",
+        "security-audit",
+        "test-suite",
+        "build-verification",
+        "architecture-check"
+      ],
+      "requiredReviews": 1,
+      "maxFilesChanged": 400,
+      "requireDescription": true
+    },
+    "branchProtection": {
+      "main": {
+        "requireStatusChecks": true,
+        "requireUpToDateBranch": true,
+        "requiredStatusChecks": ["quality-gate-summary"],
+        "enforceAdmins": true
+      },
+      "develop": {
+        "requireStatusChecks": true,
+        "requireUpToDateBranch": false,
+        "requiredStatusChecks": ["code-quality", "test-suite"],
+        "enforceAdmins": false
+      }
+    }
+  },
+  "notifications": {
+    "slack": {
+      "enabled": false,
+      "webhookUrl": "",
+      "channels": {
+        "success": "#ci-success",
+        "failure": "#ci-failures"
+      }
+    },
+    "github": {
+      "createIssues": true,
+      "issueLabels": ["quality-gate", "automated"],
+      "assignToAuthor": true
+    }
+  },
+  "artifacts": {
+    "retention": {
+      "eslintReport": 14,
+      "coverageReport": 14,
+      "securityReports": 30,
+      "buildArtifacts": 7,
+      "architectureReport": 14,
+      "documentationReport": 14
+    }
+  }
+}

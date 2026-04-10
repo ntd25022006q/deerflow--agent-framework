@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+build/
+.next/
+.nuxt/
+output/
+out/
+.turbo/
+.vercel/
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Deerflow state
+.deerflow/
+.deerflow/reports/
+.deerflow/metrics/
+.deerflow/baselines/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing
+.cypress/
+playwright-report/
+test-results/
+
+# Cache
+.cache/
+.eslintcache
+.tsbuildinfo
+*.tsbuildinfo
+
+# Misc
+*.tgz
+.npmrc
+.yarn-integrity
+
+# Temporary
+tmp/
+temp/
