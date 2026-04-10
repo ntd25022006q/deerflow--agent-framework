@@ -35,7 +35,7 @@ The Deerflow Agent Framework was created in response to a systematic analysis of
 
 These rules apply to:
 
-- **All AI agents** operating within the Deerflow ecosystem, including but not limited to: Cursor, Windsurf (Cascade), Claude Code, GitHub Copilot, and OpenAI Codex.
+- **All AI agents** operating within the Deerflow ecosystem, including but not limited to: Cursor, Windsurf (Cascade), Claude Code, GitHub Copilot, OpenAI Codex, Cline, Continue.dev, Aider, Zed, PearAI, Trae, Melty, Augment Code, Amazon Q, Roo Code, and any future AI coding agent.
 - **All code** generated, modified, or reviewed by AI agents within Deerflow projects.
 - **All languages and frameworks** used within Deerflow projects, with specific provisions for TypeScript, JavaScript, React, Node.js, and related ecosystems.
 - **All project phases** from initial scaffolding through production deployment and maintenance.

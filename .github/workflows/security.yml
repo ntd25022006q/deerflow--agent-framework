@@ -2,6 +2,7 @@
 # DEERFLOW AGENT FRAMEWORK — Security Scanning
 # =============================================================================
 # Dedicated security workflow. Runs on push/PR and weekly schedule.
+# No npm dependency — this is a rules/config framework, not a Node.js app.
 # =============================================================================
 
 name: Security Scan
@@ -14,8 +15,12 @@ on:
       - '**/*.tsx'
       - '**/*.js'
       - '**/*.jsx'
-      - 'package.json'
-      - 'package-lock.json'
+      - '**/*.json'
+      - '**/*.yaml'
+      - '**/*.yml'
+      - '**/*.sh'
+      - '**/*.toml'
+      - '**/*.md'
   pull_request:
     branches: [main]
   schedule:
@@ -23,28 +28,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  dependency-audit:
-    name: Dependency Audit
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - run: npm ci --prefer-offline 2>/dev/null || npm install
-
-      - name: npm audit
-        run: npm audit --audit-level=high --production 2>/dev/null || true
-        continue-on-error: true
-
-      - name: Check for outdated dependencies
-        run: npm outdated 2>/dev/null || echo "No outdated check available"
-        continue-on-error: true
-
   secret-scan:
     name: Secret Detection
     runs-on: ubuntu-latest
@@ -73,7 +56,7 @@ jobs:
 
           FOUND=0
           for pattern in "${PATTERNS[@]}"; do
-            MATCHES=$(git log --all --full-history -p -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.json' '*.env*' '*.yaml' '*.yml' '*.toml' 2>/dev/null | grep -E "$pattern" | grep -v 'example\|placeholder\|test\|mock\|dummy\|your-' || true)
+            MATCHES=$(git log --all --full-history -p -- '*.ts' '*.tsx' '*.js' '*.jsx' '*.json' '*.env*' '*.yaml' '*.yml' '*.toml' '*.sh' 2>/dev/null | grep -E "$pattern" | grep -v 'example\|placeholder\|test\|mock\|dummy\|your-' || true)
             if [ -n "$MATCHES" ]; then
               echo "::warning::Possible secret pattern found: $pattern"
               FOUND=1
@@ -105,7 +88,20 @@ jobs:
       - name: Validate gitleaks config
         if: steps.config.outputs.has_config == 'true'
         run: |
-          echo "Deerflow gitleaks config found with $(grep -c '[[rules]]' security/.gitleaks.toml) secret detection rules"
+          # Validate TOML syntax
+          python3 -c "
+          import tomllib, sys
+          with open('security/.gitleaks.toml', 'rb') as f:
+              data = tomllib.load(f)
+          rules = data.get('rules', [])
+          print(f'Valid TOML with {len(rules)} secret detection rules')
+          assert len(rules) > 0, 'No rules defined in gitleaks config'
+          " 2>&1 || {
+            echo "::error::security/.gitleaks.toml is invalid or has no rules"
+            exit 1
+          }
+
+          echo "Deerflow gitleaks config found with $(grep -c '^\[\[rules\]\]' security/.gitleaks.toml) secret detection rules"
 
   license-check:
     name: License Compliance
@@ -114,13 +110,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - run: npm ci --prefer-offline 2>/dev/null || npm install
-
-      - name: Check licenses
+      - name: Check project LICENSE file
         run: |
-          npx license-checker --summary 2>/dev/null || echo "License checker not available"
+          if [ ! -f "LICENSE" ]; then
+            echo "::error::LICENSE file not found"
+            exit 1
+          fi
+          echo "  OK: LICENSE file exists ($(head -1 LICENSE))"
+
+      - name: Check dependency licenses (optional, only if package.json exists)
+        run: |
+          if [ -f "package.json" ] && [ -f "package-lock.json" ]; then
+            npm ci --prefer-offline 2>/dev/null || npm install 2>/dev/null || true
+            npx license-checker --summary 2>/dev/null || echo "  License checker not available"
+          else
+            echo "  SKIP: No package.json found — this is a rules/config framework"
+          fi
         continue-on-error: true

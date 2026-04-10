@@ -6,7 +6,7 @@
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/ntd25022006q/deerflow--agent-framework)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![AI Agents](https://img.shields.io/badge/supports-Cursor%20%7C%20Windsurf%20%7C%20Claude%20Code%20%7C%20Copilot%20%7C%20Codex%20%7C%20ALL-purple.svg)]
+[![AI Agents](https://img.shields.io/badge/agents-17%20supported%20%7C%20Universal%20coverage-purple.svg)]
 [![Strict Mode](https://img.shields.io/badge/strict%20mode-ON-red.svg)]
 [![Quality Gates](https://img.shields.io/badge/quality%20gates-8%20stages-orange.svg)]
 [![Problems Solved](https://img.shields.io/badge/problems%20solved-34%2B-critical.svg)]
@@ -59,7 +59,7 @@ Built from a systematic analysis of **34+ problem categories** that AI agents co
 
 Most "AI coding rules" are simple `.cursorrules` files with a few guidelines. Deerflow is a **complete enforcement system** with:
 
-- **5 dedicated rule files** for different AI agents, all derived from a single master source of truth
+- **17 dedicated rule files** for different AI agents (15 native + 2 universal), all derived from a single master source of truth
 - **8-phase agentic workflow** that agents must follow for every task
 - **17 skill tiers** with verification and gating requirements
 - **35 anti-patterns** cataloged with detection and correction procedures
@@ -250,6 +250,12 @@ The first line of defense. AI agents are configured with comprehensive rule file
 | `CLAUDE.md` | 414 lines of Claude Code-specific rules |
 | `.github/copilot-instructions.md` | 447 lines of GitHub Copilot rules |
 | `.codex/instructions.md` | 460 lines of OpenAI Codex rules |
+| `.clinerules` + `CLINE.md` | 442 + 296 lines of Cline rules |
+| `.continue/rules/deerflow-rules.md` | 436 lines of Continue.dev rules |
+| `CONVENTIONS.md` | 397 lines of Aider conventions |
+| `ZED.md` | 435 lines of Zed AI rules |
+| `.roomodes` | 266 lines of Roo Code rules (JSON) |
+| `.ai-rules` | 423 lines of universal AI rules |
 | `core/rules/master-rules.md` | 678-line single source of truth with 34 problem categories |
 
 **What's enforced:**
@@ -386,14 +392,27 @@ deerflow--agent-framework/
 ├── .cursorrules                    # Cursor AI rules (470 lines)
 ├── .windsurfrules                  # Windsurf rules (456 lines)
 ├── CLAUDE.md                       # Claude Code rules (414 lines)
+├── CLINE.md                        # Cline rules alternative (296 lines)
+├── ZED.md                          # Zed AI rules (435 lines)
+├── .ai-rules                       # Universal AI rules (423 lines)
+├── CONVENTIONS.md                  # Aider conventions (397 lines)
+├── .clinerules                     # Cline rules (442 lines)
+├── .roomodes                       # Roo Code rules JSON (266 lines)
 ├── .cursor/rules/                  # Cursor 2026 rules (MDC format)
 │   ├── deerflow-core.mdc           # Core rules for Cursor
 │   ├── deerflow-security.mdc       # Security rules for Cursor
 │   └── deerflow-workflow.mdc       # Workflow rules for Cursor
+├── .continue/rules/                # Continue.dev rules
+│   └── deerflow-rules.md           # Full Deerflow rules (436 lines)
+├── .pearai/rules.md                # PearAI rules (435 lines)
+├── .trae/rules.md                  # Trae rules (408 lines)
+├── .melty/rules.md                 # Melty rules (408 lines)
+├── .augment/instructions.md        # Augment Code rules (422 lines)
+├── .amazonq/rules.md               # Amazon Q rules (423 lines)
 ├── .github/
 │   ├── copilot-instructions.md     # GitHub Copilot rules (447 lines)
 │   ├── workflows/
-│   │   ├── ci.yml                  # Main CI/CD pipeline (8 parallel jobs)
+│   │   ├── ci.yml                  # Main CI/CD pipeline (9 jobs + summary)
 │   │   └── security.yml            # Security scanning workflow
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── bug_report.md           # Bug report template
@@ -485,20 +504,38 @@ deerflow--agent-framework/
 
 ---
 
-## 🤖 Supported AI Agents
+## 🤖 Supported AI Agents (17 Agents — Universal Coverage)
 
-**Deerflow works with EVERY AI coding agent — no exceptions.** The framework provides dedicated rule files for the most popular agents, plus a universal master rules document that works with any current or future AI agent.
+**Deerflow works with EVERY AI coding agent — no exceptions.** The framework provides dedicated rule files for 17 agents, plus a universal rules file that works with any current or future AI agent.
 
-| Agent | Rule File | Lines | Status | Features |
-|-------|-----------|-------|--------|----------|
-| **Cursor** | `.cursorrules` + `.cursor/rules/*.mdc` | 470 + 3 MDC | ✅ Full Support | File operations, multi-file editing, agent mode, Cursor 2026 |
-| **Windsurf** | `.windsurfrules` | 456 | ✅ Full Support | Cascade flow rules, context management |
-| **Claude Code** | `CLAUDE.md` | 414 | ✅ Full Support | Tool usage rules, file operation safety |
-| **GitHub Copilot** | `.github/copilot-instructions.md` | 447 | ✅ Full Support | Code completion rules, chat rules |
-| **OpenAI Codex** | `.codex/instructions.md` | 460 | ✅ Full Support | Code generation rules, context awareness |
-| **Any Other Agent** | `core/rules/master-rules.md` | 678 | ✅ Universal | Paste into ANY agent's system prompt |
+### Tier 1: Full Native Support (dedicated rule files)
 
-> **Not limited to the list above.** The `master-rules.md` is the single source of truth containing all 34 problem categories, quality standards, and enforcement rules. It works with **any** AI coding agent — Zed, Void, PearAI, Amp, Cline, Continue.dev, Tabnine, Codeium, Amazon Q, or any future agent. Simply paste it into the agent's system prompt or rules configuration.
+| # | Agent | Rule File | Lines | Status |
+|---|-------|-----------|-------|--------|
+| 1 | **Cursor** | `.cursorrules` + `.cursor/rules/*.mdc` | 470 + 3 MDC | Full Support |
+| 2 | **Windsurf** | `.windsurfrules` | 456 | Full Support |
+| 3 | **Claude Code** | `CLAUDE.md` | 414 | Full Support |
+| 4 | **GitHub Copilot** | `.github/copilot-instructions.md` | 447 | Full Support |
+| 5 | **OpenAI Codex** | `.codex/instructions.md` | 460 | Full Support |
+| 6 | **Cline** | `.clinerules` + `CLINE.md` | 442 + 296 | Full Support |
+| 7 | **Continue.dev** | `.continue/rules/deerflow-rules.md` | 436 | Full Support |
+| 8 | **Aider** | `CONVENTIONS.md` | 397 | Full Support |
+| 9 | **Zed** | `ZED.md` | 435 | Full Support |
+| 10 | **PearAI** | `.pearai/rules.md` | 435 | Full Support |
+| 11 | **Trae** | `.trae/rules.md` | 408 | Full Support |
+| 12 | **Melty** | `.melty/rules.md` | 408 | Full Support |
+| 13 | **Augment Code** | `.augment/instructions.md` | 422 | Full Support |
+| 14 | **Amazon Q** | `.amazonq/rules.md` | 423 | Full Support |
+| 15 | **Roo Code** | `.roomodes` | 266 | Full Support |
+
+### Tier 2: Universal Coverage (any current or future agent)
+
+| # | Agent | Rule File | Lines | Status |
+|---|-------|-----------|-------|--------|
+| 16 | **Any Agent** | `.ai-rules` | 423 | Universal |
+| 17 | **Any Agent** | `core/rules/master-rules.md` | 678 | Universal (SSoT) |
+
+> **Not limited to the 15 listed agents above.** The `.ai-rules` file and `master-rules.md` are the universal single source of truth containing all 34 problem categories, quality standards, and enforcement rules. They work with **any** AI coding agent — Void, Amp, Tabnine, Codeium, Supermaven, Cody, Sourcegraph, or any future agent. Simply paste into the agent's system prompt or rules configuration.
 
 ### Agent-Specific Highlights
 
@@ -512,7 +549,13 @@ deerflow--agent-framework/
 
 **OpenAI Codex**: Includes Code Generation Rules with API-specific constraints, Context Awareness directives for maintaining consistency across generations, and Sandbox execution rules.
 
-**Any Other Agent**: Simply paste the contents of `core/rules/master-rules.md` into the agent's system prompt, instructions, or rules configuration. All 34 problem categories, quality gates, and enforcement rules apply universally.
+**Cline**: Includes autonomous agent rules for file editing, repository context management, and multi-step task execution with proper safety gates.
+
+**Aider**: Includes file edit rules for complete replacements, repository context analysis, and git integration with commit convention enforcement.
+
+**Roo Code**: Structured JSON format with custom modes (deerflow-code, deerflow-architect, deerflow-security) for task-specific enforcement.
+
+**Any Other Agent**: Simply paste the contents of `.ai-rules` or `core/rules/master-rules.md` into the agent's system prompt, instructions, or rules configuration. All 34 problem categories, quality gates, and enforcement rules apply universally.
 
 ---
 

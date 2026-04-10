@@ -2,7 +2,7 @@
 # DEERFLOW AGENT FRAMEWORK — Main CI/CD Pipeline
 # =============================================================================
 # Runs on every push and PR. 8 parallel jobs + summary gate.
-# Designed to work with ALL AI coding agent projects.
+# Designed to validate the framework repo itself (no package.json).
 # =============================================================================
 
 name: Deerflow CI/CD
@@ -28,12 +28,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20'
   DEERFLOW_STRICT: 'true'
 
 jobs:
   # ===========================================================================
-  # Job 1: Code Quality (Lint + Format + TypeScript)
+  # Job 1: Code Quality (Syntax + Format Checks)
   # ===========================================================================
   code-quality:
     name: Code Quality
@@ -44,29 +43,73 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline 2>/dev/null || npm install
-
-      - name: ESLint
-        run: npx eslint . --max-warnings 0 --report-unused-disable-directives || true
-        continue-on-error: true
+          node-version: '20'
 
       - name: TypeScript Check
         run: |
-          npx tsc --noEmit --strict --skipLibCheck 2>/dev/null || true
-        continue-on-error: true
+          FAILED=0
+          for f in $(find . -name '*.ts' -not -path '*/node_modules/*' -not -path '*/.git/*'); do
+            echo "  Checking: $f"
+            npx tsc --noEmit --strict --skipLibCheck --esModuleInterop --moduleResolution node --target ES2020 --module commonjs "$f" 2>&1
+            if [ $? -ne 0 ]; then
+              echo "  FAIL: $f (TypeScript compilation error)"
+              FAILED=1
+            else
+              echo "  PASS: $f"
+            fi
+          done
+          exit $FAILED
 
       - name: Check file sizes
         run: |
           MAX_SIZE=300
           FAILED=0
-          for f in $(find . -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' | grep -v node_modules | grep -v '.git'); do
+          for f in $(find . -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' -o -name '*.sh' -o -name '*.md' | grep -v node_modules | grep -v '.git' | grep -v 'CHANGELOG.md'); do
             LINES=$(wc -l < "$f")
             if [ "$LINES" -gt "$MAX_SIZE" ]; then
               echo "::warning file=$f,line=$MAX_SIZE,title=File too large::$f has $LINES lines (max $MAX_SIZE)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: Bash syntax check
+        run: |
+          FAILED=0
+          for f in $(find . -name '*.sh' -not -path '*/node_modules/*' -not -path '*/.git/*'); do
+            bash -n "$f" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f (syntax error)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: JSON validation
+        run: |
+          FAILED=0
+          for f in $(find . -name '*.json' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -name 'package-lock.json'); do
+            python3 -c "import json; json.load(open('$f'))" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f (invalid JSON)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: YAML validation
+        run: |
+          FAILED=0
+          for f in $(find . \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.github/workflows/*'); do
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f (invalid YAML)"
               FAILED=1
             fi
           done
@@ -84,26 +127,13 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline 2>/dev/null || npm install
-
-      - name: npm audit (critical + high)
-        run: |
-          npm audit --audit-level=high --omit=dev 2>/dev/null || true
-        continue-on-error: true
-
       - name: Check for secrets
         run: |
           FAILED=0
           # Common secret patterns
           PATTERNS='(api_key|apikey|secret|password|token|auth)[\s]*[=:][\s]*["\x27][^"\x27]{8,}'
-          for f in $(find . -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.json' -o -name '*.env*' | grep -v node_modules | grep -v '.git'); do
-            MATCHES=$(grep -iE "$PATTERNS" "$f" 2>/dev/null | grep -v 'example\|placeholder\|your-\|TODO\|FIXME' || true)
+          for f in $(find . -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.json' -o -name '*.env*' -o -name '*.sh' -o -name '*.yaml' -o -name '*.yml' -o -name '*.toml' | grep -v node_modules | grep -v '.git'); do
+            MATCHES=$(grep -iE "$PATTERNS" "$f" 2>/dev/null | grep -v 'example\|placeholder\|your-\|TODO\|FIXME\|x_description\|pattern' || true)
             if [ -n "$MATCHES" ]; then
               echo "::warning file=$f,title=Possible secret detected::$(echo "$MATCHES" | head -1)"
               FAILED=1
@@ -111,13 +141,44 @@ jobs:
           done
           exit $FAILED
 
-      - name: Check dependency licenses
+      - name: Check dependency licenses (optional)
         run: |
-          npx license-checker --summary --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;WTFPL' 2>/dev/null || true
+          if [ -f "package.json" ] && [ -f "package-lock.json" ]; then
+            npx license-checker --summary --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;WTFPL' 2>/dev/null || true
+            echo "  License check completed"
+          else
+            echo "  SKIP: No package.json found — this is a rules/config framework, not a Node.js app"
+          fi
         continue-on-error: true
 
+      - name: Gitleaks config validation
+        run: |
+          if [ ! -f "security/.gitleaks.toml" ]; then
+            echo "::error::security/.gitleaks.toml not found"
+            exit 1
+          fi
+
+          # Check it's valid TOML (basic structural checks)
+          RULES_COUNT=$(grep -c '^\[\[rules\]\]' security/.gitleaks.toml || echo "0")
+          if [ "$RULES_COUNT" -eq 0 ]; then
+            echo "::warning::No [[rules]] sections found in security/.gitleaks.toml"
+          else
+            echo "  OK: $RULES_COUNT secret detection rules found"
+          fi
+
+          # Validate TOML syntax with Python
+          python3 -c "
+          import tomllib
+          with open('security/.gitleaks.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(f'  OK: Valid TOML with {len(data.get(\"rules\", []))} rules')
+          " 2>&1 || {
+            echo "::error::security/.gitleaks.toml is not valid TOML"
+            exit 1
+          }
+
   # ===========================================================================
-  # Job 3: Test Suite
+  # Job 3: Test Suite (Framework Validation)
   # ===========================================================================
   test-suite:
     name: Test Suite
@@ -128,18 +189,94 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: '20'
 
-      - name: Install dependencies
-        run: npm ci --prefer-offline 2>/dev/null || npm install
+      - name: Check all rule files exist and are non-empty
+        run: |
+          FAILED=0
+          RULE_FILES=(
+            "core/rules/master-rules.md"
+            "core/workflows/workflow-engine.ts"
+            "core/workflows/agentic-workflow.md"
+            "core/workflows/task-decomposition.md"
+            "core/skills/skill-registry.ts"
+            "core/skills/agent-skills.md"
+            "core/skills/anti-patterns.md"
+          )
+          for f in "${RULE_FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "  FAIL: $f not found"
+              FAILED=1
+            elif [ ! -s "$f" ]; then
+              echo "  FAIL: $f is empty"
+              FAILED=1
+            else
+              LINES=$(wc -l < "$f")
+              echo "  PASS: $f ($LINES lines)"
+            fi
+          done
+          exit $FAILED
 
-      - name: Run tests
-        run: npx vitest run --coverage 2>/dev/null || npx jest --passWithNoTests 2>/dev/null || echo "No test runner configured yet"
-        continue-on-error: true
+      - name: Check all hook files pass bash syntax check
+        run: |
+          FAILED=0
+          for f in hooks/*; do
+            if [ -f "$f" ]; then
+              bash -n "$f" 2>&1
+              if [ $? -eq 0 ]; then
+                echo "  PASS: $f"
+              else
+                echo "  FAIL: $f (syntax error)"
+                FAILED=1
+              fi
+            fi
+          done
+          exit $FAILED
+
+      - name: Check all JSON files are valid
+        run: |
+          FAILED=0
+          for f in $(find . -name '*.json' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -name 'package-lock.json'); do
+            python3 -c "import json; json.load(open('$f'))" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f (invalid JSON)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: Check all YAML files are valid
+        run: |
+          FAILED=0
+          for f in $(find . \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.github/workflows/*'); do
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f (invalid YAML)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: Check TypeScript files compile
+        run: |
+          FAILED=0
+          for f in $(find . -name '*.ts' -not -path '*/node_modules/*' -not -path '*/.git/*'); do
+            npx tsc --noEmit --strict --skipLibCheck --esModuleInterop --moduleResolution node --target ES2020 --module commonjs "$f" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f (compilation error)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
 
   # ===========================================================================
-  # Job 4: Build Verification
+  # Job 4: Build Verification (Framework Integrity)
   # ===========================================================================
   build-verification:
     name: Build Verification
@@ -148,26 +285,115 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci --prefer-offline 2>/dev/null || npm install
-
-      - name: Build
-        run: npm run build 2>/dev/null || npx next build 2>/dev/null || echo "No build script configured"
-        continue-on-error: true
-
-      - name: Check bundle size
+      - name: Verify all referenced files exist
         run: |
-          if [ -d "dist" ] || [ -d ".next" ]; then
-            find dist .next -name '*.js' -size +500k 2>/dev/null | while read f; do
-              SIZE=$(du -h "$f" | cut -f1)
-              echo "::warning file=$f,title=Large bundle::$f is $SIZE (max 500KB)"
-            done
+          FAILED=0
+
+          # Files referenced in CI workflow checks
+          REFERENCED_FILES=(
+            "README.md"
+            "CLAUDE.md"
+            ".cursorrules"
+            ".windsurfrules"
+            ".github/copilot-instructions.md"
+            "core/rules/master-rules.md"
+            "config/deerflow.config.json"
+            "mcp-tools/config.json"
+            "security/.gitleaks.toml"
+            "security/pre-commit-config.yaml"
+            "security/dependency-check.sh"
+            "security/security-rules.md"
+            "scripts/init-project.sh"
+            "scripts/setup.sh"
+            "scripts/quality-check.sh"
+            "hooks/pre-commit"
+            "hooks/pre-push"
+            "hooks/commit-msg"
+            "hooks/post-merge"
+            "quality-gates/ci-cd/pipeline-config.json"
+            "quality-gates/ci-cd/github-actions.yml"
+            "quality-gates/linters/tsconfig-strict.json"
+            "docs/PROBLEM_ANALYSIS.md"
+            "docs/ARCHITECTURE.md"
+            "docs/QUICK_START.md"
+            "docs/CONFIGURATION.md"
+            "CHANGELOG.md"
+            "LICENSE"
+          )
+          for f in "${REFERENCED_FILES[@]}"; do
+            if [ -f "$f" ]; then
+              echo "  OK: $f"
+            else
+              echo "  MISSING: $f"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: Check cross-references between rule files
+        run: |
+          FAILED=0
+
+          # Check that agent rule files reference master-rules.md
+          AGENT_RULES=(
+            "CLAUDE.md"
+            ".cursorrules"
+            ".windsurfrules"
+            ".github/copilot-instructions.md"
+          )
+          for f in "${AGENT_RULES[@]}"; do
+            if [ -f "$f" ]; then
+              if grep -qi 'master-rules' "$f" 2>/dev/null; then
+                echo "  OK: $f references master-rules"
+              else
+                echo "  WARN: $f does not reference master-rules.md"
+              fi
+            fi
+          done
+
+          # Check that config files reference valid paths
+          if [ -f "config/deerflow.config.json" ]; then
+            python3 -c "
+          import json, os
+          config = json.load(open('config/deerflow.config.json'))
+          # Look for file path references in the config
+          for key, value in config.items():
+              if isinstance(value, str) and ('/' in value or value.endswith('.md') or value.endswith('.json')):
+                  if not os.path.exists(value):
+                      print(f'  WARN: Config references missing file: {value} (key: {key})')
+          print('  OK: config/deerflow.config.json cross-references checked')
+          " 2>&1
           fi
+
+          exit $FAILED
+
+      - name: Verify all scripts are executable
+        run: |
+          FAILED=0
+          SCRIPTS=(
+            "scripts/init-project.sh"
+            "scripts/setup.sh"
+            "scripts/quality-check.sh"
+            "security/dependency-check.sh"
+            "hooks/pre-commit"
+            "hooks/pre-push"
+            "hooks/commit-msg"
+            "hooks/post-merge"
+          )
+          for f in "${SCRIPTS[@]}"; do
+            if [ -f "$f" ]; then
+              if [ -x "$f" ]; then
+                echo "  OK: $f is executable"
+              else
+                echo "  FAIL: $f is NOT executable"
+                FAILED=1
+              fi
+            else
+              echo "  MISSING: $f"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
 
   # ===========================================================================
   # Job 5: Architecture Check
@@ -179,41 +405,81 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Check circular dependencies
-        run: |
-          npm install -g madge 2>/dev/null || true
-          madge --circular --extensions ts,tsx,js,jsx src/ 2>/dev/null || echo "No circular deps detected (or no src/ directory)"
-        continue-on-error: true
-
       - name: Check file structure
         run: |
-          echo "Checking project structure..."
-          # Verify core Deerflow files exist
+          echo "Checking framework structure..."
+          # Verify all Deerflow framework files exist
           REQUIRED_FILES=(
             "README.md"
             "CLAUDE.md"
             ".cursorrules"
             ".windsurfrules"
             ".github/copilot-instructions.md"
-            ".codex/instructions.md"
             "core/rules/master-rules.md"
+            "core/workflows/workflow-engine.ts"
+            "core/workflows/agentic-workflow.md"
+            "core/workflows/task-decomposition.md"
+            "core/skills/skill-registry.ts"
+            "core/skills/agent-skills.md"
+            "core/skills/anti-patterns.md"
+            "config/deerflow.config.json"
+            "mcp-tools/config.json"
+            "security/.gitleaks.toml"
+            "security/pre-commit-config.yaml"
+            "security/dependency-check.sh"
+            "security/security-rules.md"
+            "scripts/init-project.sh"
+            "scripts/setup.sh"
+            "scripts/quality-check.sh"
+            "hooks/pre-commit"
+            "hooks/pre-push"
+            "hooks/commit-msg"
+            "hooks/post-merge"
+            "quality-gates/ci-cd/pipeline-config.json"
+            "quality-gates/ci-cd/github-actions.yml"
+            "quality-gates/linters/tsconfig-strict.json"
+            "quality-gates/linters/eslint-rules.js"
+            "docs/PROBLEM_ANALYSIS.md"
+            "docs/ARCHITECTURE.md"
+            "docs/QUICK_START.md"
+            "docs/CONFIGURATION.md"
+            "CHANGELOG.md"
+            "LICENSE"
           )
           MISSING=0
           for f in "${REQUIRED_FILES[@]}"; do
             if [ -f "$f" ]; then
               echo "  OK: $f"
             else
-              echo "::warning title=Missing file::$f not found"
+              echo "::error title=Missing file::$f not found"
               MISSING=$((MISSING + 1))
             fi
           done
           if [ $MISSING -gt 0 ]; then
-            echo "::warning::$MISSING required files missing"
+            echo "::error::$MISSING required files missing"
+            exit 1
           fi
+
+      - name: Check agent rule files reference master-rules
+        run: |
+          FAILED=0
+          AGENT_RULES=(
+            "CLAUDE.md"
+            ".cursorrules"
+            ".windsurfrules"
+            ".github/copilot-instructions.md"
+          )
+          for f in "${AGENT_RULES[@]}"; do
+            if [ -f "$f" ]; then
+              if grep -qi 'master-rules\|master rules\|single source of truth' "$f" 2>/dev/null; then
+                echo "  OK: $f references master-rules"
+              else
+                echo "  FAIL: $f does not reference master-rules.md"
+                FAILED=1
+              fi
+            fi
+          done
+          exit $FAILED
 
   # ===========================================================================
   # Job 6: Rule Files Validation
@@ -235,6 +501,18 @@ jobs:
             "Claude Code:CLAUDE.md"
             "GitHub Copilot:.github/copilot-instructions.md"
             "OpenAI Codex:.codex/instructions.md"
+            "Cline:.clinerules"
+            "Cline (alt):CLINE.md"
+            "Continue.dev:.continue/rules/deerflow-rules.md"
+            "Aider:CONVENTIONS.md"
+            "Zed:ZED.md"
+            "PearAI:.pearai/rules.md"
+            "Trae:.trae/rules.md"
+            "Melty:.melty/rules.md"
+            "Augment:.augment/instructions.md"
+            "Amazon Q:.amazonq/rules.md"
+            "Roo Code:.roomodes"
+            "Universal:.ai-rules"
           )
 
           ALL_OK=true
@@ -266,7 +544,7 @@ jobs:
       - name: Validate bash scripts
         run: |
           FAILED=0
-          for f in hooks/* scripts/*.sh security/dependency-check.sh; do
+          for f in $(find . -name '*.sh' -not -path '*/node_modules/*' -not -path '*/.git/*'); do
             if [ -f "$f" ]; then
               bash -n "$f" 2>&1
               if [ $? -eq 0 ]; then
@@ -296,7 +574,7 @@ jobs:
       - name: Validate YAML config files
         run: |
           FAILED=0
-          for f in $(find . -name '*.yaml' -o -name '*.yml' | grep -v '.github/workflows' | grep -v node_modules | grep -v '.git'); do
+          for f in $(find . \( -name '*.yaml' -o -name '*.yml' \) -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/.github/workflows/*'); do
             python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>&1
             if [ $? -eq 0 ]; then
               echo "  PASS: $f"
