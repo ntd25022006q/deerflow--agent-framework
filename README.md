@@ -391,7 +391,15 @@ deerflow--agent-framework/
 │   ├── deerflow-security.mdc       # Security rules for Cursor
 │   └── deerflow-workflow.mdc       # Workflow rules for Cursor
 ├── .github/
-│   └── copilot-instructions.md     # GitHub Copilot rules (447 lines)
+│   ├── copilot-instructions.md     # GitHub Copilot rules (447 lines)
+│   ├── workflows/
+│   │   ├── ci.yml                  # Main CI/CD pipeline (8 parallel jobs)
+│   │   └── security.yml            # Security scanning workflow
+│   ├── ISSUE_TEMPLATE/
+│   │   ├── bug_report.md           # Bug report template
+│   │   ├── feature_request.md      # Feature request template
+│   │   └── rule_issue.md           # Agent rule issue template
+│   └── PULL_REQUEST_TEMPLATE.md    # PR template
 ├── .codex/
 │   └── instructions.md             # OpenAI Codex rules (460 lines)
 ├── .editorconfig                   # Editor configuration
@@ -479,22 +487,22 @@ deerflow--agent-framework/
 
 ## 🤖 Supported AI Agents
 
-Deerflow provides dedicated rule files for the most popular AI coding agents, with a universal master rules document for any other agent.
+**Deerflow works with EVERY AI coding agent — no exceptions.** The framework provides dedicated rule files for the most popular agents, plus a universal master rules document that works with any current or future AI agent.
 
 | Agent | Rule File | Lines | Status | Features |
 |-------|-----------|-------|--------|----------|
-| **Cursor** | `.cursorrules` | 470 | ✅ Full Support | File operations, multi-file editing, agent mode |
+| **Cursor** | `.cursorrules` + `.cursor/rules/*.mdc` | 470 + 3 MDC | ✅ Full Support | File operations, multi-file editing, agent mode, Cursor 2026 |
 | **Windsurf** | `.windsurfrules` | 456 | ✅ Full Support | Cascade flow rules, context management |
 | **Claude Code** | `CLAUDE.md` | 414 | ✅ Full Support | Tool usage rules, file operation safety |
 | **GitHub Copilot** | `.github/copilot-instructions.md` | 447 | ✅ Full Support | Code completion rules, chat rules |
 | **OpenAI Codex** | `.codex/instructions.md` | 460 | ✅ Full Support | Code generation rules, context awareness |
-| **Any Agent** | `core/rules/master-rules.md` | 678 | ✅ Reference | Universal rules, paste into any agent |
-| **Zed** | `.zed/settings.json` | — | 🔜 Planned | Editor-specific configuration |
-| **Void** | `.voidrules` | — | 🔜 Planned | Void editor support |
+| **Any Other Agent** | `core/rules/master-rules.md` | 678 | ✅ Universal | Paste into ANY agent's system prompt |
+
+> **Not limited to the list above.** The `master-rules.md` is the single source of truth containing all 34 problem categories, quality standards, and enforcement rules. It works with **any** AI coding agent — Zed, Void, PearAI, Amp, Cline, Continue.dev, Tabnine, Codeium, Amazon Q, or any future agent. Simply paste it into the agent's system prompt or rules configuration.
 
 ### Agent-Specific Highlights
 
-**Cursor**: Includes rules for multi-file editing sessions, agent mode constraints, and `.cursorrules`-specific directives for code generation quality.
+**Cursor**: Includes rules for multi-file editing sessions, agent mode constraints, `.cursorrules`-specific directives, and Cursor 2026 MDC format rules (`.cursor/rules/*.mdc`).
 
 **Windsurf (Cascade)**: Includes Cascade Flow Rules that enforce phase-by-phase progression, Context Management directives for long sessions, and Cascade-specific anti-patterns.
 
@@ -503,6 +511,8 @@ Deerflow provides dedicated rule files for the most popular AI coding agents, wi
 **GitHub Copilot**: Includes Code Completion Rules that ensure inline suggestions meet quality standards, Copilot Chat Rules for interactive sessions, and workspace-wide enforcement directives.
 
 **OpenAI Codex**: Includes Code Generation Rules with API-specific constraints, Context Awareness directives for maintaining consistency across generations, and Sandbox execution rules.
+
+**Any Other Agent**: Simply paste the contents of `core/rules/master-rules.md` into the agent's system prompt, instructions, or rules configuration. All 34 problem categories, quality gates, and enforcement rules apply universally.
 
 ---
 

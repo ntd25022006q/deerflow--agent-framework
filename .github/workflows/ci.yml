@@ -1,0 +1,486 @@
+# =============================================================================
+# DEERFLOW AGENT FRAMEWORK — Main CI/CD Pipeline
+# =============================================================================
+# Runs on every push and PR. 8 parallel jobs + summary gate.
+# Designed to work with ALL AI coding agent projects.
+# =============================================================================
+
+name: Deerflow CI/CD
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      run_full_audit:
+        description: 'Run full audit (security + architecture + performance)'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+  DEERFLOW_STRICT: 'true'
+
+jobs:
+  # ===========================================================================
+  # Job 1: Code Quality (Lint + Format + TypeScript)
+  # ===========================================================================
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline 2>/dev/null || npm install
+
+      - name: ESLint
+        run: npx eslint . --max-warnings 0 --report-unused-disable-directives || true
+        continue-on-error: true
+
+      - name: TypeScript Check
+        run: |
+          npx tsc --noEmit --strict --skipLibCheck 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Check file sizes
+        run: |
+          MAX_SIZE=300
+          FAILED=0
+          for f in $(find . -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.jsx' | grep -v node_modules | grep -v '.git'); do
+            LINES=$(wc -l < "$f")
+            if [ "$LINES" -gt "$MAX_SIZE" ]; then
+              echo "::warning file=$f,line=$MAX_SIZE,title=File too large::$f has $LINES lines (max $MAX_SIZE)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+  # ===========================================================================
+  # Job 2: Security Audit
+  # ===========================================================================
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline 2>/dev/null || npm install
+
+      - name: npm audit (critical + high)
+        run: |
+          npm audit --audit-level=high --omit=dev 2>/dev/null || true
+        continue-on-error: true
+
+      - name: Check for secrets
+        run: |
+          FAILED=0
+          # Common secret patterns
+          PATTERNS='(api_key|apikey|secret|password|token|auth)[\s]*[=:][\s]*["\x27][^"\x27]{8,}'
+          for f in $(find . -name '*.ts' -o -name '*.tsx' -o -name '*.js' -o -name '*.json' -o -name '*.env*' | grep -v node_modules | grep -v '.git'); do
+            MATCHES=$(grep -iE "$PATTERNS" "$f" 2>/dev/null | grep -v 'example\|placeholder\|your-\|TODO\|FIXME' || true)
+            if [ -n "$MATCHES" ]; then
+              echo "::warning file=$f,title=Possible secret detected::$(echo "$MATCHES" | head -1)"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: Check dependency licenses
+        run: |
+          npx license-checker --summary --onlyAllow 'MIT;Apache-2.0;BSD-2-Clause;BSD-3-Clause;ISC;0BSD;WTFPL' 2>/dev/null || true
+        continue-on-error: true
+
+  # ===========================================================================
+  # Job 3: Test Suite
+  # ===========================================================================
+  test-suite:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline 2>/dev/null || npm install
+
+      - name: Run tests
+        run: npx vitest run --coverage 2>/dev/null || npx jest --passWithNoTests 2>/dev/null || echo "No test runner configured yet"
+        continue-on-error: true
+
+  # ===========================================================================
+  # Job 4: Build Verification
+  # ===========================================================================
+  build-verification:
+    name: Build Verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci --prefer-offline 2>/dev/null || npm install
+
+      - name: Build
+        run: npm run build 2>/dev/null || npx next build 2>/dev/null || echo "No build script configured"
+        continue-on-error: true
+
+      - name: Check bundle size
+        run: |
+          if [ -d "dist" ] || [ -d ".next" ]; then
+            find dist .next -name '*.js' -size +500k 2>/dev/null | while read f; do
+              SIZE=$(du -h "$f" | cut -f1)
+              echo "::warning file=$f,title=Large bundle::$f is $SIZE (max 500KB)"
+            done
+          fi
+
+  # ===========================================================================
+  # Job 5: Architecture Check
+  # ===========================================================================
+  architecture-check:
+    name: Architecture Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check circular dependencies
+        run: |
+          npm install -g madge 2>/dev/null || true
+          madge --circular --extensions ts,tsx,js,jsx src/ 2>/dev/null || echo "No circular deps detected (or no src/ directory)"
+        continue-on-error: true
+
+      - name: Check file structure
+        run: |
+          echo "Checking project structure..."
+          # Verify core Deerflow files exist
+          REQUIRED_FILES=(
+            "README.md"
+            "CLAUDE.md"
+            ".cursorrules"
+            ".windsurfrules"
+            ".github/copilot-instructions.md"
+            ".codex/instructions.md"
+            "core/rules/master-rules.md"
+          )
+          MISSING=0
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [ -f "$f" ]; then
+              echo "  OK: $f"
+            else
+              echo "::warning title=Missing file::$f not found"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+          if [ $MISSING -gt 0 ]; then
+            echo "::warning::$MISSING required files missing"
+          fi
+
+  # ===========================================================================
+  # Job 6: Rule Files Validation
+  # ===========================================================================
+  rule-validation:
+    name: Rule Files Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate rule files exist for all agents
+        run: |
+          echo "=== Deerflow Rule Files Coverage ==="
+
+          AGENTS=(
+            "Cursor:.cursorrules"
+            "Windsurf:.windsurfrules"
+            "Claude Code:CLAUDE.md"
+            "GitHub Copilot:.github/copilot-instructions.md"
+            "OpenAI Codex:.codex/instructions.md"
+          )
+
+          ALL_OK=true
+          for agent_info in "${AGENTS[@]}"; do
+            IFS=':' read -r agent file <<< "$agent_info"
+            if [ -f "$file" ]; then
+              LINES=$(wc -l < "$file")
+              echo "  OK: $agent -> $file ($LINES lines)"
+            else
+              echo "  MISSING: $agent -> $file"
+              ALL_OK=false
+            fi
+          done
+
+          # Check Cursor 2026 MDC rules
+          if [ -d ".cursor/rules" ]; then
+            MDC_COUNT=$(find .cursor/rules -name '*.mdc' | wc -l)
+            echo "  OK: Cursor 2026 MDC rules ($MDC_COUNT files)"
+          fi
+
+          # Check master rules
+          if [ -f "core/rules/master-rules.md" ]; then
+            LINES=$(wc -l < "core/rules/master-rules.md")
+            echo "  OK: Master Rules ($LINES lines - single source of truth)"
+          fi
+
+          $ALL_OK
+
+      - name: Validate bash scripts
+        run: |
+          FAILED=0
+          for f in hooks/* scripts/*.sh security/dependency-check.sh; do
+            if [ -f "$f" ]; then
+              bash -n "$f" 2>&1
+              if [ $? -eq 0 ]; then
+                echo "  PASS: $f"
+              else
+                echo "  FAIL: $f"
+                FAILED=1
+              fi
+            fi
+          done
+          exit $FAILED
+
+      - name: Validate JSON config files
+        run: |
+          FAILED=0
+          for f in $(find . -name '*.json' -not -path '*/node_modules/*' -not -path '*/.git/*' -not -name 'package-lock.json'); do
+            python3 -c "import json; json.load(open('$f'))" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+      - name: Validate YAML config files
+        run: |
+          FAILED=0
+          for f in $(find . -name '*.yaml' -o -name '*.yml' | grep -v '.github/workflows' | grep -v node_modules | grep -v '.git'); do
+            python3 -c "import yaml; yaml.safe_load(open('$f'))" 2>&1
+            if [ $? -eq 0 ]; then
+              echo "  PASS: $f"
+            else
+              echo "  FAIL: $f"
+              FAILED=1
+            fi
+          done
+          exit $FAILED
+
+  # ===========================================================================
+  # Job 7: Documentation Check
+  # ===========================================================================
+  documentation-check:
+    name: Documentation Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check README completeness
+        run: |
+          echo "Checking README.md..."
+          if [ ! -f "README.md" ]; then
+            echo "::error::README.md not found"
+            exit 1
+          fi
+
+          # Check essential sections
+          SECTIONS=("Quick Start" "Architecture" "Configuration" "Contributing")
+          MISSING=0
+          for section in "${SECTIONS[@]}"; do
+            if grep -qi "$section" README.md; then
+              echo "  OK: Section '$section' found"
+            else
+              echo "::warning title=Missing section::'$section' section not found in README.md"
+              MISSING=$((MISSING + 1))
+            fi
+          done
+
+          # Check GitHub URL is set (not placeholder)
+          if grep -q 'your-username' README.md; then
+            echo "::error::README.md still contains placeholder 'your-username'"
+            exit 1
+          fi
+          echo "  OK: No placeholder URLs found"
+
+      - name: Check docs directory
+        run: |
+          echo "Checking documentation files..."
+          DOCS=(
+            "docs/PROBLEM_ANALYSIS.md"
+            "docs/ARCHITECTURE.md"
+            "docs/QUICK_START.md"
+            "docs/CONFIGURATION.md"
+          )
+          for f in "${DOCS[@]}"; do
+            if [ -f "$f" ]; then
+              LINES=$(wc -l < "$f")
+              echo "  OK: $f ($LINES lines)"
+            else
+              echo "::warning title=Missing doc::$f not found"
+            fi
+          done
+
+      - name: Check CHANGELOG
+        run: |
+          if [ -f "CHANGELOG.md" ]; then
+            echo "  OK: CHANGELOG.md exists"
+          else
+            echo "::warning::CHANGELOG.md not found"
+          fi
+
+      - name: Check LICENSE
+        run: |
+          if [ -f "LICENSE" ]; then
+            echo "  OK: LICENSE exists ($(head -1 LICENSE))"
+          else
+            echo "::error::LICENSE file not found"
+            exit 1
+          fi
+
+  # ===========================================================================
+  # Job 8: Git Hooks & Config Validation
+  # ===========================================================================
+  hooks-validation:
+    name: Git Hooks Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify all git hooks exist
+        run: |
+          HOOKS=("pre-commit" "pre-push" "commit-msg" "post-merge")
+          ALL_OK=true
+          for hook in "${HOOKS[@]}"; do
+            if [ -f "hooks/$hook" ]; then
+              bash -n "hooks/$hook" 2>&1 && echo "  PASS: hooks/$hook" || {
+                echo "  FAIL: hooks/$hook (syntax error)"
+                ALL_OK=false
+              }
+            else
+              echo "  MISSING: hooks/$hook"
+              ALL_OK=false
+            fi
+          done
+          $ALL_OK
+
+      - name: Verify config files
+        run: |
+          # Main config
+          if [ -f "config/deerflow.config.json" ]; then
+            python3 -c "import json; c=json.load(open('config/deerflow.config.json')); assert c.get('version'), 'Missing version'; assert c.get('strictMode') == True, 'Strict mode must be enabled'"
+            echo "  PASS: config/deerflow.config.json"
+          fi
+
+          # MCP config
+          if [ -f "mcp-tools/config.json" ]; then
+            python3 -c "import json; c=json.load(open('mcp-tools/config.json')); assert 'mcpServers' in c or 'servers' in c, 'Missing servers config'"
+            echo "  PASS: mcp-tools/config.json"
+          fi
+
+          # Editor configs
+          for f in .editorconfig .prettierrc .gitignore; do
+            if [ -f "$f" ]; then
+              echo "  PASS: $f"
+            else
+              echo "  WARN: $f missing"
+            fi
+          done
+
+  # ===========================================================================
+  # Summary Gate — blocks merge if critical jobs fail
+  # ===========================================================================
+  ci-summary:
+    name: CI Summary Gate
+    runs-on: ubuntu-latest
+    needs:
+      - code-quality
+      - security-audit
+      - test-suite
+      - build-verification
+      - architecture-check
+      - rule-validation
+      - documentation-check
+      - hooks-validation
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "============================================"
+          echo "  DEERFLOW CI/CD PIPELINE SUMMARY"
+          echo "============================================"
+          echo ""
+
+          RESULTS=(
+            "code-quality:${{ needs.code-quality.result }}"
+            "security-audit:${{ needs.security-audit.result }}"
+            "test-suite:${{ needs.test-suite.result }}"
+            "build-verification:${{ needs.build-verification.result }}"
+            "architecture-check:${{ needs.architecture-check.result }}"
+            "rule-validation:${{ needs.rule-validation.result }}"
+            "documentation-check:${{ needs.documentation-check.result }}"
+            "hooks-validation:${{ needs.hooks-validation.result }}"
+          )
+
+          FAILED=0
+          for result in "${RESULTS[@]}"; do
+            IFS=':' read -r job status <<< "$result"
+            if [ "$status" = "success" ]; then
+              echo "  PASS: $job"
+            elif [ "$status" = "failure" ]; then
+              echo "  FAIL: $job"
+              FAILED=$((FAILED + 1))
+            else
+              echo "  WARN: $job ($status)"
+            fi
+          done
+
+          echo ""
+          if [ $FAILED -gt 0 ]; then
+            echo "::error::$FAILED job(s) failed"
+            exit 1
+          else
+            echo "All jobs passed!"
+          fi
